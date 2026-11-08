@@ -1,4 +1,4 @@
-"""Step 1 & Step 2 — Conversational Gemini 4 Argon Hypothesis Intake, Smart Steering,
+"""Step 1 & Step 2 — Deterministic Hypothesis Intake, Smart Steering,
 Scope Filtering & Structured Specification Compiler.
 
 1. Explains what can be asked and filters out non-financial or unsupported prompts.
@@ -9,8 +9,6 @@ Scope Filtering & Structured Specification Compiler.
 
 from __future__ import annotations
 
-import json
-import os
 import re
 from typing import Any
 
@@ -18,19 +16,15 @@ from engine.data_provider import ENTITY_TO_TICKER, resolve_ticker
 from engine.guardrails import sanitize_research_notes
 from engine.schemas import (
     AmbiguityQuestion,
+    ChatTurn,
     ExecutionAssumptions,
     InterpretationResponse,
     RiskControls,
     SteeredHypothesisCard,
     StrategyParameters,
     StrategySpec,
+    TemplateId,
 )
-
-try:
-    from google import genai
-except ImportError:
-    genai = None  # type: ignore
-
 
 UNSUPPORTED_KEYWORDS = (
     (
@@ -433,7 +427,7 @@ def _build_steered_cards(
     return cards
 
 
-def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
+def _compile_hypothesis_deterministic(text: str, template: TemplateId | None = None) -> InterpretationResponse:
     """High-precision deterministic parser translating English hypotheses into StrategySpec,
     conversational Gemini guidance, structured understood summary, and steered cards.
     """
@@ -455,7 +449,7 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
     tickers = _extract_tickers_from_text(cleaned)
 
     # 2. Check if prompt is completely unrelated to finance/markets/assets
-    if not tickers and not FINANCIAL_DOMAIN_TERMS.search(lower):
+    if template is None and not tickers and not FINANCIAL_DOMAIN_TERMS.search(lower):
         reason = (
             "Your input does not appear to describe a financial market or price hypothesis. "
             "Alpha Auditor tests historical hypotheses on equities, ETFs, indices, crypto, and asset pairs "
@@ -586,7 +580,7 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
         "SPY": "QQQ", "QQQ": "SPY", "GLD": "SLV",
     }
 
-    if is_pairs:
+    if template == "pairs_cointegration_reversion" or (template is None and is_pairs):
         asset_a = tickers[0] if len(tickers) >= 1 else "KO"
         asset_b = tickers[1] if len(tickers) >= 2 else DEFAULT_PAIR_PARTNER.get(asset_a, "PEP" if asset_a != "PEP" else "KO")
 
@@ -781,7 +775,10 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
         )
 
     # Template 2: Consecutive Streak
-    if streak_match or re.search(r"\b(consecutive|in a row|straight\s+(?:up|down|positive|negative|red|green|winning|losing))\b", lower):
+    has_streak = streak_match or re.search(
+        r"\b(consecutive|in a row|straight\s+(?:up|down|positive|negative|red|green|winning|losing))\b", lower
+    )
+    if template == "consecutive_streak" or (template is None and has_streak):
         raw_n = streak_match.group(1) if streak_match else "3"
         n_days = WORD_TO_INT.get(raw_n, int(raw_n) if raw_n.isdigit() else 3)
         trigger_clause = lower.split("tend")[0] if "tend" in lower else (lower.split(",")[0] if "," in lower else lower)
@@ -863,11 +860,12 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
 
     # Template 4: Trend / Moving Average Crossover or Channel Breakout
     has_oscillator_terms = bool(sigma_match or re.search(r"\b(rsi|bollinger|z-score|z score|standard deviation|oversold|overbought)\b", lower))
-    if (
+    has_trend = (
         ma_pair_match
         or re.search(r"\b(sma|ema|golden cross|death cross|breakout|donchian|channel high|day high)\b", lower)
         or ("moving average" in lower and not has_oscillator_terms)
-    ):
+    )
+    if template == "trend_breakout" or (template is None and has_trend):
         if "donchian" in lower or "breakout" in lower or "channel" in lower or "day high" in lower:
             t_var: Any = "donchian_breakout"
             ch_match = re.search(r"(\d{1,3})\s*(?:-|\s)?(?:day|d)\s+(?:high|low|breakout|channel|donchian)", lower)
@@ -976,7 +974,7 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
         )
 
     # Check if user explicitly asked for volatility-scaled daily shock
-    if re.search(r"\b(vol(?:-|\s)?scaled|volatility(?:-|\s)?scaled|volatility\s+shock|vol\s+shock)\b", lower):
+    if template in (None, "return_threshold") and re.search(r"\b(vol(?:-|\s)?scaled|volatility(?:-|\s)?scaled|volatility\s+shock|vol\s+shock)\b", lower):
         entry_val = float(sigma_match.group(1)) if sigma_match else 2.0
         win_match = re.search(r"(\d{1,3})\s*(?:-|\s)?(?:day|d)\s+(?:vol|realized|window|lookback)", lower)
         win = int(win_match.group(1)) if win_match else 20
@@ -1032,7 +1030,7 @@ def _compile_hypothesis_deterministic(text: str) -> InterpretationResponse:
         )
 
     # Template 3: Mean Reversion Oscillator (RSI / Bollinger / Z-Score)
-    if sigma_match or re.search(r"\b(rsi|bollinger|z-score|z score|standard deviation|oversold|overbought)\b", lower):
+    if template == "mean_reversion_oscillator" or (template is None and has_oscillator_terms):
         win_match = re.search(r"(\d{1,3})\s*(?:-|\s)?(?:day|d)\s+(?:rsi|bollinger|lower\s+bollinger|upper\s+bollinger|band|z-score|z score|moving average|mean|lookback|window)", lower)
         osc_trigger = lower.split(",")[0] if "," in lower else (lower.split("does it")[0] if "does it" in lower else lower)
         has_explicit_thresh = bool(sigma_match or pct_match)
@@ -1308,6 +1306,7 @@ def _apply_risk_and_cost_overrides(spec: StrategySpec, lower: str) -> list[str]:
 def _apply_followup_refinement(
     base_resp: InterpretationResponse,
     followup_text: str,
+    template: TemplateId | None = None,
 ) -> InterpretationResponse:
     """Apply a short conversational follow-up refinement on top of an existing compiled StrategySpec."""
     if base_resp.proposed_spec is None:
@@ -1323,17 +1322,18 @@ def _apply_followup_refinement(
     )
     has_osc_cue = bool(re.search(r"\b(rsi|bollinger|z-score|z score|oversold|overbought)\b", lower_f))
     has_trend_cue = bool(re.search(r"\b(sma|ema|golden cross|death cross|breakout|donchian|moving average)\b", lower_f))
-    if (
+    switch_by_cue = (
         (has_streak_cue and base_spec.template_id != "consecutive_streak")
         or (has_osc_cue and base_spec.template_id not in ("mean_reversion_oscillator", "pairs_cointegration_reversion"))
         or (has_trend_cue and base_spec.template_id != "trend_breakout")
-    ):
+    )
+    if (template is not None and template != base_spec.template_id) or (template is None and switch_by_cue):
         asset_prefix = (
             f"{base_spec.asset_a} and {base_spec.asset_b}"
             if base_spec.strategy_family == "pairs_trading" and base_spec.asset_b
             else base_spec.asset_a
         )
-        switched = _compile_hypothesis_deterministic(f"{asset_prefix}: {cleaned_f}")
+        switched = _compile_hypothesis_deterministic(f"{asset_prefix}: {cleaned_f}", template)
         if switched.proposed_spec is not None:
             switched.proposed_spec.hypothesis_text = f"{base_spec.hypothesis_text.rstrip('.')} ({cleaned_f})"
         return switched
@@ -1445,49 +1445,6 @@ def _apply_followup_refinement(
     )
 
 
-def _try_live_gemini_enrichment(
-    baseline: InterpretationResponse,
-    effective_text: str,
-) -> InterpretationResponse:
-    """Optionally invoke live Gemini API for conversational phrasing when explicitly enabled
-    via ALPHA_AUDITOR_ENABLE_LIVE_GEMINI=1 and GEMINI_API_KEY, while strictly validating
-    any structured StrategySpec against the deterministic schema and falling back explicitly.
-    """
-    enable_live = os.environ.get("ALPHA_AUDITOR_ENABLE_LIVE_GEMINI", "").strip() == "1"
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not enable_live:
-        baseline.interpretation_mode = "deterministic_rules"
-        return baseline
-    if not api_key or genai is None or baseline.proposed_spec is None:
-        baseline.interpretation_mode = "live_gemini_fallback"
-        baseline.model_used = "deterministic-spec-compiler-v2 (live-fallback-no-key)"
-        return baseline
-
-    try:
-        client = genai.Client(api_key=api_key)
-        model_id = os.environ.get("ALPHA_AUDITOR_GEMINI_MODEL", "gemini-2.5-flash")
-        prompt = (
-            "You are a neutral quantitative finance specification assistant. "
-            "Given this user hypothesis and compiled StrategySpec JSON, provide a 2-sentence "
-            "neutral summary explaining what historical rule will be tested without predicting results.\n"
-            f"Hypothesis: {effective_text}\n"
-            f"Compiled Spec: {baseline.proposed_spec.model_dump_json()}"
-        )
-        resp = client.models.generate_content(model=model_id, contents=prompt)
-        reply_text = (getattr(resp, "text", "") or "").strip()
-        # Validate that spec still passes strict Pydantic validation
-        validated_spec = StrategySpec.model_validate(baseline.proposed_spec.model_dump())
-        baseline.proposed_spec = validated_spec
-        if reply_text:
-            baseline.gemini_reply = sanitize_research_notes([reply_text])[0]
-        baseline.interpretation_mode = "live_gemini"
-        baseline.model_used = model_id
-    except Exception:
-        baseline.interpretation_mode = "live_gemini_fallback"
-        baseline.model_used = "deterministic-spec-compiler-v2 (live-fallback)"
-    return baseline
-
-
 def _is_standalone_or_sector_prompt(text: str) -> bool:
     lower_t = text.strip().lower()
     has_sector_cue = any(
@@ -1504,62 +1461,101 @@ def _is_standalone_or_sector_prompt(text: str) -> bool:
     return bool(_extract_tickers_from_text(text) or has_sector_cue or starts_new)
 
 
+def _resolve_clarifications(turns: list[ChatTurn]) -> list[ChatTurn]:
+    """Carry stated assets or triggers into a clarification without rewriting the chat transcript."""
+    resolved = []
+    pending = []
+    for turn in turns:
+        if turn.role != "user":
+            continue
+        if turn.basket == "needs_detail":
+            pending.append(turn.content)
+            continue
+        if pending and turn.basket != "no_match":
+            context = " ".join(pending)
+            assets = _extract_tickers_from_text(turn.content)
+            if not assets:
+                # A trigger-only answer should retain the asset(s) that prompted the question.
+                prior_assets = _extract_tickers_from_text(context)
+                if prior_assets:
+                    text = " and ".join(prior_assets) + ": " + turn.content
+                    turn = turn.model_copy(update={"content": text})
+            elif not _extract_tickers_from_text(context) and not FINANCIAL_DOMAIN_TERMS.search(turn.content):
+                # An asset-only answer completes the user's earlier trigger.
+                turn = turn.model_copy(update={"content": context + " " + turn.content})
+        pending.clear()
+        resolved.append(turn)
+    return resolved
+
+
 def interpret_hypothesis(
     hypothesis_text: str,
     chat_history: list[Any] | None = None,
+    template: TemplateId | None = None,
 ) -> InterpretationResponse:
     """Interpret a natural-language trading hypothesis with 100% deterministic repeatability.
     Supports multi-turn refinement when chat_history is provided.
     """
-    from engine.schemas import ChatTurn
-
     prior_turns: list[ChatTurn] = []
     if chat_history:
         for item in chat_history:
             if isinstance(item, ChatTurn):
                 prior_turns.append(item)
             elif isinstance(item, dict) and "role" in item and "content" in item:
-                prior_turns.append(ChatTurn(role=item["role"], content=str(item["content"])))
+                prior_turns.append(ChatTurn.model_validate(item))
 
     effective_text = hypothesis_text.strip()
+    compiler_history = prior_turns
+    if template is not None and any(turn.basket == "needs_detail" for turn in prior_turns):
+        resolved = _resolve_clarifications([*prior_turns, ChatTurn(role="user", content=effective_text, basket=template)])
+        compiler_history = resolved[:-1]
+        effective_text = resolved[-1].content
+    if template is not None and len(effective_text) < 3:
+        return InterpretationResponse(
+            status="needs_clarification",
+            gemini_reply="What price movement would trigger the test for that asset?",
+        )
     lower_eff = effective_text.lower()
 
     # Check if this is a short follow-up parameter refinement on an active multi-turn conversation
     is_unsupported_kw = any(re.search(pat, lower_eff) for pat, _ in UNSUPPORTED_KEYWORDS)
     has_fin_or_param_cue = bool(FINANCIAL_DOMAIN_TERMS.search(lower_eff))
     is_followup_refinement = bool(
-        prior_turns
+        compiler_history
         and not is_unsupported_kw
         and not _is_standalone_or_sector_prompt(effective_text)
         and has_fin_or_param_cue
     )
 
-    enable_live = os.environ.get("ALPHA_AUDITOR_ENABLE_LIVE_GEMINI", "").strip() == "1"
     norm_key = " ".join(effective_text.strip().split()).lower()
-    if norm_key in _INTERPRETATION_CACHE and not prior_turns and not enable_live:
+    cacheable = template is None and not prior_turns
+    if cacheable and norm_key in _INTERPRETATION_CACHE:
         return InterpretationResponse.model_validate_json(_INTERPRETATION_CACHE[norm_key])
 
     baseline: InterpretationResponse | None = None
     if is_followup_refinement:
-        prior_user_texts = [t.content for t in prior_turns if t.role == "user" and t.content.strip()]
+        prior_inputs = [t for t in compiler_history if t.role == "user" and t.content.strip()]
         active_base: InterpretationResponse | None = None
-        for u_txt in prior_user_texts:
+        for turn in prior_inputs:
+            if turn.basket in ("no_match", "needs_detail"):
+                continue
+            u_txt = turn.content
             u_low = u_txt.strip().lower()
             if any(re.search(pat, u_low) for pat, _ in UNSUPPORTED_KEYWORDS):
                 continue
             if _is_standalone_or_sector_prompt(u_txt) or active_base is None:
-                cand = _compile_hypothesis_deterministic(u_txt)
+                cand = _compile_hypothesis_deterministic(u_txt, turn.basket)
                 if cand.status != "unsupported" and cand.proposed_spec is not None:
                     if cand.proposed_spec is not None:
                         _apply_risk_and_cost_overrides(cand.proposed_spec, u_low)
                     active_base = cand
             elif active_base is not None and FINANCIAL_DOMAIN_TERMS.search(u_low):
-                active_base = _apply_followup_refinement(active_base, u_txt)
+                active_base = _apply_followup_refinement(active_base, u_txt, turn.basket)
         if active_base is not None and active_base.proposed_spec is not None:
-            baseline = _apply_followup_refinement(active_base, effective_text)
+            baseline = _apply_followup_refinement(active_base, effective_text, template)
 
     if baseline is None:
-        baseline = _compile_hypothesis_deterministic(effective_text)
+        baseline = _compile_hypothesis_deterministic(effective_text, template)
         if baseline.proposed_spec is not None:
             extra_notes = _apply_risk_and_cost_overrides(baseline.proposed_spec, lower_eff)
             if extra_notes:
@@ -1568,17 +1564,12 @@ def interpret_hypothesis(
                     list(baseline.interpretation_notes or []) + extra_notes
                 )
 
-    baseline = _try_live_gemini_enrichment(baseline, baseline.proposed_spec.hypothesis_text if baseline.proposed_spec else effective_text)
-
     updated_history = list(prior_turns) + [
         ChatTurn(role="user", content=hypothesis_text.strip()),
         ChatTurn(role="assistant", content=baseline.gemini_reply),
     ]
     baseline.chat_history = updated_history
 
-    if not prior_turns and not enable_live:
+    if cacheable:
         _INTERPRETATION_CACHE[norm_key] = baseline.model_dump_json()
     return baseline
-
-
-

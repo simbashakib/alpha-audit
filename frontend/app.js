@@ -381,8 +381,8 @@ async function initWorkbench() {
     if (qParam) {
       const inputEl = document.getElementById('hypothesis-input');
       if (inputEl) inputEl.value = qParam;
-      await compileHypothesis(qParam, true);
-      if (params.get('autorun') === '1') {
+      const compiled = await compileHypothesis(qParam, true);
+      if (compiled && params.get('autorun') === '1') {
         const chk = document.getElementById('chk-human-confirm');
         if (chk) chk.checked = true;
         await executeAuditFromForm();
@@ -562,7 +562,7 @@ function bindSpecFormEvents() {
 
   const hypInput = document.getElementById('hypothesis-input');
   hypInput.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       await sendHypothesis();
     }
@@ -851,13 +851,12 @@ async function compileHypothesis(text, fromUserAction = false) {
   if (sendBtn && sendBtn.disabled) return;
   if (sendBtn) sendBtn.disabled = true;
 
-  if (fromUserAction) {
-    appendUserChatTurn(text);
-  }
-
+  const input = document.getElementById('hypothesis-input');
+  const status = document.getElementById('chat-status');
+  status.textContent = 'Matching your hypothesis to a basket…';
   const badge = document.getElementById('compiler-status-badge');
   if (badge) {
-    badge.textContent = 'Mode: Interpreting...';
+    badge.textContent = 'Matching your hypothesis to a basket…';
     badge.className = 'panel-badge cyan';
   }
 
@@ -871,32 +870,37 @@ async function compileHypothesis(text, fromUserAction = false) {
         chat_history: state.chatHistory,
       }),
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(typeof error.detail === 'string' ? error.detail : 'Gemini chat is unavailable. Please try again.');
+    }
     interp = await res.json();
+    if (interp.interpretation_mode !== 'live_gemini' || !interp.gemini_reply?.trim()) {
+      throw new Error('Gemini did not return a reply. Please try again.');
+    }
+  } catch (err) {
+    status.textContent = err instanceof TypeError ? 'Could not reach the chat server. Please try again.' : err.message;
+    if (badge) {
+      badge.textContent = 'Gemini unavailable';
+      badge.className = 'panel-badge amber';
+    }
+    return false;
   } finally {
     if (sendBtn) sendBtn.disabled = false;
   }
 
-  if (Array.isArray(interp.chat_history) && interp.chat_history.length > 0) {
-    state.chatHistory = interp.chat_history;
-  } else {
-    state.chatHistory.push({ role: 'user', content: text });
-    if (interp.gemini_reply) {
-      state.chatHistory.push({ role: 'assistant', content: interp.gemini_reply });
-    }
-  }
-
-  const modeStr = interp.interpretation_mode || 'deterministic_rules';
+  status.textContent = '';
+  if (fromUserAction) appendUserChatTurn(text);
+  if (input.value.trim() === text) input.value = '';
+  state.chatHistory = interp.chat_history;
   const modelTag = document.getElementById('compiler-model-tag');
-  if (modelTag) {
-    modelTag.textContent = `Compiler: ${interp.model_used || 'deterministic-spec-compiler-v2'}`;
-  }
-
+  if (modelTag) modelTag.textContent = `Basket classifier: ${interp.model_used}`;
   const thread = document.getElementById('chat-thread');
   const ambBox = document.getElementById('ambiguity-container');
 
-  if (interp.status === 'unsupported') {
+  if (!interp.proposed_spec) {
     if (badge) {
-      badge.textContent = `Mode: ${modeStr} (Out of Scope)`;
+      badge.textContent = interp.status === 'unsupported' ? 'No matching basket' : 'More detail needed';
       badge.className = 'panel-badge amber';
     }
     if (thread) {
@@ -905,7 +909,7 @@ async function compileHypothesis(text, fromUserAction = false) {
       replyEl.innerHTML = `
         <div class="chat-bubble" style="border-color:rgba(244, 63, 94, 0.45);">
           <div class="chat-sender" style="color:var(--accent-rose);">Alpha Auditor</div>
-          <div>${escapeHtml(interp.gemini_reply || interp.unsupported_reason)}</div>
+          <div>${escapeHtml(interp.gemini_reply)}</div>
         </div>
       `;
       thread.appendChild(replyEl);
@@ -915,11 +919,12 @@ async function compileHypothesis(text, fromUserAction = false) {
   }
 
   if (badge) {
-    badge.textContent = `Mode: ${modeStr === 'live_gemini' ? 'Live Gemini' : 'Deterministic Rules'}`;
+    badge.textContent = 'Basket matched';
     badge.className = 'panel-badge emerald';
   }
 
-  const safeReply = escapeHtml(interp.gemini_reply || 'I mapped your idea into a clean, testable specification.');
+  const basket = state.catalog.templates.find(t => t.template_id === interp.proposed_spec.template_id);
+  const safeReply = escapeHtml(interp.gemini_reply);
   const formattedReply = safeReply
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.*?)`/g, '<code>$1</code>');
@@ -980,11 +985,18 @@ async function compileHypothesis(text, fromUserAction = false) {
   }
 
   if (thread) {
+    // Historical controls reference the shared configuration form. Only the current proposal may edit it.
+    thread.querySelectorAll('.dynamic-assistant button').forEach((button) => {
+      button.disabled = true;
+      button.title = 'A newer proposal is available below.';
+    });
     const replyEl = document.createElement('div');
     replyEl.className = 'chat-msg assistant dynamic-assistant';
     replyEl.innerHTML = `
       <div class="chat-bubble">
-        <div class="chat-sender">Alpha Auditor</div>
+        <div class="chat-sender">Gemini · Matched basket</div>
+        <strong>${escapeHtml(basket?.name || interp.proposed_spec.template_id)}</strong>
+        <div class="chat-sender" style="margin-top:12px;">Alpha Auditor · Proposed rule</div>
         <div>${formattedReply}</div>
         ${inlineAmbiguitiesHtml}
         ${variationsHtml}
@@ -1095,7 +1107,9 @@ async function compileHypothesis(text, fromUserAction = false) {
     state.baselineReport = null;
     state.initialParsedSpec = JSON.parse(JSON.stringify(interp.proposed_spec));
     populateSpecForm(interp.proposed_spec);
+    return true;
   }
+  return false;
 }
 
 function renderUserVsDefaultsBox(spec) {
@@ -1526,7 +1540,7 @@ function readSpecFromForm() {
     rawDefs && typeof rawDefs === 'object' && !Array.isArray(rawDefs) ? rawDefs : {};
   return {
     hypothesis_text:
-      document.getElementById('hypothesis-input').value.trim() ||
+      state.currentSpec?.hypothesis_text ||
       document.getElementById('spec-title').value.trim() ||
       'Historical market hypothesis evaluation',
     title:
@@ -2037,6 +2051,12 @@ function renderLiteraturePreviewFromSpec(spec) {
   }
 }
 
+function commentarySource(report) {
+  if (report.commentary_model) return `Gemini · ${escapeHtml(report.commentary_model)}`;
+  if (report.commentary_error) return `Local explanation · ${escapeHtml(report.commentary_error)}`;
+  return 'Local explanation';
+}
+
 function renderLiteratureStep(report) {
   const lit = report.literature_review;
   if (!lit) return;
@@ -2047,7 +2067,7 @@ function renderLiteratureStep(report) {
     synthEl.style.display = 'block';
     synthEl.innerHTML = `
       <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--accent-cyan); text-transform:uppercase; margin-bottom:4px;">
-        GEMINI LITERATURE &amp; EMPIRICAL BIAS SYNTHESIS
+        Literature &amp; empirical bias · ${commentarySource(report)}
       </div>
       ${escapeHtml(lit.gemini_literature_synthesis)}
     `;
@@ -2939,7 +2959,7 @@ function renderEconometricsTab(report) {
 }
 
 /* =========================================================================
-   STEP 5 RENDERER: GEMINI CUSTOM ADVERSARIAL STRESS TESTS (TABBED 1 BY 1)
+   STEP 5 RENDERER: ADVERSARIAL STRESS TESTS (TABBED 1 BY 1)
    ========================================================================= */
 function renderStressTestsStep(report) {
   const suite = report.stress_test_suite;
@@ -2954,7 +2974,7 @@ function renderStressTestsStep(report) {
 
   document.getElementById('stress-gemini-overview').innerHTML = `
     <div style="font-family:var(--font-mono); font-size:10.5px; color:var(--accent-cyan); text-transform:uppercase; margin-bottom:4px;">
-      ADVERSARIAL STRESS TEST SUITE OVERVIEW
+      Stress test overview · ${commentarySource(report)}
     </div>
     ${escapeHtml(suite.gemini_overview)}
   `;
@@ -3028,7 +3048,7 @@ function renderStressTestsStep(report) {
                   <strong>Vulnerability Probed:</strong> ${escapeHtml(t.vulnerability_probed)}
                 </div>
                 <div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:8px;">
-                  <strong>Why This Test Was Selected:</strong> ${escapeHtml(t.gemini_rationale)}
+                  <strong>Risk this test probes:</strong> ${escapeHtml(t.gemini_rationale)}
                 </div>
                 <div class="formula-banner" style="font-family:var(--font-sans); color:var(--text-primary);">
                   <strong>Empirical Finding:</strong> ${escapeHtml(t.key_finding)}

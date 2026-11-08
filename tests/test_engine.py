@@ -235,12 +235,14 @@ def test_walk_forward_stepper_validation():
         decide_market_step({"history": [], "cash_pence": 1000, "shares": 0, "fee_pence": 0, "slippage_bps": 0})
 
 
-def test_fastapi_endpoints_all_templates():
+def test_fastapi_endpoints_all_templates(gemini_transport, tmp_path, monkeypatch):
     """End-to-end API verification across single-asset and pairs-trading hypotheses."""
     from fastapi.testclient import TestClient
     from app.server import app
 
     client = TestClient(app)
+
+    monkeypatch.setattr("app.server.RUNS_DIR", tmp_path)
 
     # 1. Catalog endpoint
     cat = client.get("/api/catalog")
@@ -274,6 +276,11 @@ def test_fastapi_endpoints_all_templates():
     audit_res = client.post("/api/audit/run", json=spec)
     assert audit_res.status_code == 200
     report = audit_res.json()
+    assert len(gemini_transport) == 1  # Only hypothesis intake contacts Gemini.
+    assert report["commentary_model"] is None
+    assert report["commentary_error"] is None
+    saved = client.get(f"/api/audit/{report['run_id']}")
+    assert saved.json()["stress_test_suite"] == report["stress_test_suite"]
     assert report["pairs_diagnostics"] is not None
     assert "ols_hedge_ratio_beta" in report["pairs_diagnostics"]
     assert "engle_granger_p_value" in report["pairs_diagnostics"]
@@ -525,12 +532,13 @@ def test_eight_natural_language_edge_cases_and_scorecard_signs():
     assert dims_by_id["out_of_sample_persistence"] == "CONTRADICTED"
 
 
-def test_jupyter_notebook_pdf_generation_and_endpoints():
+def test_jupyter_notebook_pdf_generation_and_endpoints(gemini_transport, tmp_path, monkeypatch):
     """Verify the Jupyter-Notebook-style PDF report generator and FastAPI PDF endpoints."""
     from fastapi.testclient import TestClient
     from app.server import app
     from engine.notebook_pdf import render_jupyter_notebook_pdf
 
+    monkeypatch.setattr("app.server.RUNS_DIR", tmp_path)
     client = TestClient(app)
 
     interp = interpret_hypothesis("I think the S&P 500 tends to recover the day after falling more than 2%.")
@@ -799,7 +807,7 @@ def test_zero_trade_holdout_and_pep_aapl_reconciliation():
         assert len(v2_report.scorecard.hypothesis_comparison_breakdown) == 3
 
 
-def test_executable_jupyter_notebook_ipynb_generation_and_fresh_kernel_execution():
+def test_executable_jupyter_notebook_ipynb_generation_and_fresh_kernel_execution(gemini_transport, tmp_path, monkeypatch):
     """Verify v4 .ipynb generation, fresh-kernel execution via nbclient, and FastAPI .ipynb endpoints."""
     from fastapi.testclient import TestClient
     from app.server import app
@@ -808,6 +816,7 @@ def test_executable_jupyter_notebook_ipynb_generation_and_fresh_kernel_execution
         render_jupyter_notebook_ipynb,
     )
 
+    monkeypatch.setattr("app.server.RUNS_DIR", tmp_path)
     client = TestClient(app)
 
     # 1. Single-asset SPY audit -> generate and execute .ipynb in a fresh kernel

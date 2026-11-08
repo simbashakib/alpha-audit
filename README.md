@@ -21,14 +21,14 @@ Alpha Auditor is a strictly causal, deterministic quantitative research workbenc
    - **Zero-Exposure & Halted Holdout Transparency**: If a circuit breaker halts trading during Formation before $t_{\text{split}}$, Out-of-Sample metrics explicitly set `is_zero_exposure = True` and `halted_prior_to_period = True`, and Out-of-Sample Scorecard dimensions report `NO_EVIDENCE` rather than penalizing or rewarding zero exposure.
 
 3. **5-Test Robustness Suite (`engine/stress_tests.py`)**
-   - **Test 1**: Out-of-Sample Temporal Split & Walk-Forward Regime Stability.
-   - **Test 2**: Execution Latency (+1 Bar Delay) & 2× Transaction Cost Shock (reporting both annualized bps/yr and cumulative % of initial capital).
-   - **Test 3**: 2D Parameter Neighbourhood Stability Surface ($\pm 20\%$ perturbations).
-   - **Test 4**: Non-Overlapping Monte Carlo Random-Entry Permutation Null ($M=250$ permutations preserving the exact multiset of trade durations, directions, leg weights, fill timing, and transaction cost deductions, with standard error $\text{SE}(\hat{p}) = \sqrt{\hat{p}(1-\hat{p})/M}$).
-   - **Test 5**: Cointegration / Stationarity Diagnostics & Deflated Sharpe Ratio (Bailey & López de Prado 2014).
+   - **Test 1** removes the largest winning trades to measure dependence on outliers.
+   - **Test 2** delays fills by one more bar and stresses transaction costs.
+   - **Test 3** compares results across volatility and market regimes.
+   - **Test 4** compares the signal with 500 simulated random-entry trade sequences when sufficient data and trades are available.
+   - **Test 5** checks structural stability for pairs or parameter sensitivity for a single-asset rule.
 
 4. **Executable v4 Jupyter Notebook (`.ipynb`) & PDF Exports (`engine/notebook_ipynb.py`, `engine/notebook_pdf.py`)**
-   - Exports a self-contained 14-cell `.ipynb` notebook with embedded aligned market data that runs top-to-bottom in a fresh Python kernel (`nbclient`) and asserts exact equality with the platform's reported metrics.
+   - Exports a notebook with embedded aligned market data. Run it in a fresh Python kernel with the project dependencies to recompute the audit and check the results against the saved report.
 
 ## Quickstart
 
@@ -38,6 +38,11 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run the Web Workbench
+
+Step 1 sends the user's hypothesis and earlier user inputs to Gemini for classification. Gemini selects one of the five built-in baskets, requests more detail, or returns no match. Alpha Auditor's local compiler fills the selected template. The user reviews the rule and confirms before running it. Backtests, literature notes, stress tests and reports run locally.
+
+Set `GEMINI_API_KEY` in the server environment or the project's Git-ignored `.env` file. Set `ALPHA_AUDITOR_GEMINI_MODEL` to select an accessible model (default `gemini-3.5-flash`).
+
 ```bash
 uvicorn app.server:app --reload --port 8000
 ```

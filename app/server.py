@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -14,12 +15,13 @@ from pydantic import BaseModel
 
 from engine.backtester import load_audit_run, run_full_audit, save_audit_run
 from engine.data_provider import CATALOG_TICKERS, validate_ticker_symbol
-from engine.hypothesis_parser import interpret_hypothesis
+from engine.gemini_chat import GeminiChatError, chat_about_hypothesis
 from engine.notebook_ipynb import render_jupyter_notebook_ipynb
 from engine.notebook_pdf import render_jupyter_notebook_pdf
 from engine.schemas import AuditReport, ChatTurn, InterpretationResponse, StrategySpec
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT_DIR / ".env", override=False)
 FRONTEND_DIR = ROOT_DIR / "frontend"
 RUNS_DIR = ROOT_DIR / "data" / "runs"
 EVAL_DIR = ROOT_DIR / "eval-runs"
@@ -219,7 +221,11 @@ def api_validate_ticker(symbol: str = Query(..., min_length=1, max_length=20)) -
 def api_interpret_hypothesis(req: HypothesisRequest) -> InterpretationResponse:
     if not req.hypothesis_text or not req.hypothesis_text.strip():
         raise HTTPException(status_code=400, detail="Provide a non-empty trading hypothesis.")
-    return interpret_hypothesis(req.hypothesis_text, chat_history=req.chat_history)
+    try:
+        baskets = {tpl["template_id"]: tpl["name"] for tpl in TEMPLATE_METADATA}
+        return chat_about_hypothesis(req.hypothesis_text.strip(), req.chat_history, baskets)
+    except GeminiChatError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.post("/api/audit/run", response_model=AuditReport)
