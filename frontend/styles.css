@@ -580,6 +580,12 @@ body {
   margin-right: 4px;
 }
 
+#chat-status:not(:empty) {
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
 .chat-composer {
   display: flex;
   align-items: center;

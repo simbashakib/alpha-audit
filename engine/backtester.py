@@ -1680,5 +1680,7 @@ def load_audit_run(path: Path) -> AuditReport:
         raw["schema_version"] = "1.0"
     if "market_as_of_date" not in raw or not raw["market_as_of_date"]:
         raw["market_as_of_date"] = raw.get("full_sample_metrics", {}).get("end_date", "")
+    suite = raw.get("stress_test_suite") or {}
+    if not raw.get("commentary_model") and str(suite.get("gemini_overview", "")).startswith("Gemini selected and executed"):
+        suite["gemini_overview"] = suite["gemini_overview"].replace("Gemini selected and executed", "Alpha Auditor ran", 1)
     return AuditReport.model_validate(raw)
-

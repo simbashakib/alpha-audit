@@ -67,7 +67,7 @@
           <div>
             <div class="step-intro-title">Research Hypothesis</div>
             <div class="step-intro-desc">
-              Describe a market hypothesis in plain English to translate it into a reproducible backtest.
+              Gemini reads your hypothesis and matches it to one of five predefined strategy baskets. Alpha Auditor builds the rule and runs the backtest after you confirm it.
             </div>
           </div>
         </div>
@@ -78,7 +78,7 @@
               <div class="chat-bubble">
                 <div class="chat-sender">Alpha Auditor</div>
                 <div>
-                  Describe a trading hypothesis you want to test — such as how an asset behaves after a sharp daily drop or multi-day streak, or whether two related stocks converge after diverging.
+                  The baskets cover price shocks, consecutive streaks, mean reversion, trend breakouts and pairs trading. For example, “Do Coke and Pepsi move together?” maps to pairs trading.
                 </div>
               </div>
             </div>
@@ -86,12 +86,14 @@
 
           <div id="preset-container" class="preset-bar"></div>
 
+          <div id="chat-status" role="status" aria-live="polite"></div>
           <div class="chat-composer">
             <textarea
               id="hypothesis-input"
               class="chat-input"
               rows="2"
-              placeholder="Enter a trading hypothesis..."
+              aria-label="Describe your hypothesis"
+              placeholder="Describe the asset and the movement you want to test…"
             ></textarea>
             <button id="btn-compile-hypothesis" class="btn btn-primary chat-send-btn">
               Send
@@ -136,7 +138,7 @@
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                 <div class="section-kicker" style="margin-bottom:0;">Parsed Specification</div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <span id="compiler-status-badge" class="subtle-tag">Mode: Deterministic Rules</span>
+                  <span id="compiler-status-badge" class="subtle-tag">Awaiting hypothesis</span>
                   <span id="compiler-model-tag" class="subtle-tag">Compiler: deterministic-spec-compiler-v2</span>
                 </div>
               </div>

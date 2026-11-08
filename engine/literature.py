@@ -401,7 +401,7 @@ METHODOLOGY_RIGOR_PAPERS: list[LiteraturePaper] = [
 _LIT_SYNTHESIS_CACHE: dict[str, str] = {}
 
 
-def _try_gemini_literature_synthesis(
+def _cached_literature_synthesis(
     spec: StrategySpec,
     base_synthesis: str,
 ) -> str:
@@ -514,7 +514,7 @@ def build_literature_review(
             f"and enforces a |z| >= {spec.parameters.stop_z_threshold or 4.0:.1f} divergence stop-loss."
         )
 
-    synthesis = _try_gemini_literature_synthesis(spec, synthesis)
+    synthesis = _cached_literature_synthesis(spec, synthesis)
 
     rigor_checklist: list[dict[str, str]] = [
         {

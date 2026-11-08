@@ -773,7 +773,7 @@ def run_adversarial_stress_suite(
     resilient_count = sum(1 for t in tests if t.outcome_badge == "RESILIENT")
 
     overview = (
-        f"Gemini selected and executed 5 adversarial stress tests tailored to '{spec.title}' ({spec.template_id} / "
+        f"Alpha Auditor ran 5 adversarial stress tests for '{spec.title}' ({spec.template_id} / "
         f"{spec.signal_variant}) on {spec.asset_a}"
         + (f" vs. {spec.asset_b}" if spec.asset_b else "")
         + f": (1) Right-Tail Outlier Trade Removal, (2) t+2 Execution Latency & 2×/3× Slippage Shock, "
