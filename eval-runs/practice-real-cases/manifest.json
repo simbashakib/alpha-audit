@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "source": "Price returns derived from Binance Vision public data (CC BY-NC-SA 4.0). Not endorsed by Binance. Practice set; months: ADAUSDT 1h 2022-01, ADAUSDT 1h 2024-06, ADAUSDT 1h 2026-09, ADAUSDT 4h 2024-05, ADAUSDT 4h 2024-11, BNBUSDT 1h 2025-07, BTCUSDT 1h 2023-08, BTCUSDT 1h 2024-04, BTCUSDT 4h 2024-04, BTCUSDT 4h 2024-07, BTCUSDT 4h 2025-03, DOGEUSDT 1h 2022-04, DOGEUSDT 1h 2022-11, DOGEUSDT 1h 2023-05, DOGEUSDT 4h 2024-12, ETHUSDT 1h 2022-11, LTCUSDT 1h 2021-03, LTCUSDT 4h 2023-03, SOLUSDT 1h 2022-01, SOLUSDT 1h 2024-09, SOLUSDT 1h 2025-02, SOLUSDT 1h 2026-03, SOLUSDT 4h 2022-11, XRPUSDT 1h 2024-10, XRPUSDT 4h 2022-04",
+  "synthetic": false,
+  "seed": 42,
+  "pack": "real-markets",
+  "case_count": 25,
+  "input_record_count": 3422,
+  "record_count_method": "first list among events/rows/prices_pence/items/lines; otherwise one per case",
+  "tasks": {
+    "markets": 25
+  },
+  "families": {
+    "real_anonymised": 25
+  },
+  "input_sha256": "3aa0c8dc8329b8e78fbdc0c39bed12fe2890d69593a8fd5e0609b23febdae9f6",
+  "answer_sha256": "a11e84dc9d88e32785faadd95bdeb494a53d13ae3330aab6f88027f814ee243f",
+  "limits": "Local visible synthetic practice, not hidden judging or proof of real-world financial performance. Inputs only go to adapters; answers stay with the evaluator."
+}

@@ -1,0 +1,57 @@
+{
+  "label": "CHALLENGE (self-serve): hidden real-markets cases",
+  "dataset": {
+    "version": 2,
+    "mode": "challenge",
+    "source": "Price returns derived from Binance Vision public data (CC BY-NC-SA 4.0). Not endorsed by Binance. Months drawn: 58 (hidden until reveal).",
+    "seed": null,
+    "pack": "real-markets",
+    "case_count": 60,
+    "tasks": {
+      "markets": 60
+    }
+  },
+  "dataset_cases": 60,
+  "attempted": 60,
+  "passed": 0,
+  "failed": 0,
+  "errors": 0,
+  "strategy_runs_completed": 60,
+  "not_run": 0,
+  "cycle_record_metrics": {
+    "cycle_precision": null,
+    "cycle_recall": null,
+    "cycle_f1": null
+  },
+  "market_summary": {
+    "paths": 60,
+    "wins_vs_buy_and_hold": 47,
+    "losses_vs_buy_and_hold": 13,
+    "ties": 0,
+    "beat_cash": 25,
+    "median_excess_vs_buy_and_hold_bps_of_capital": 203,
+    "mean_max_drawdown_bps": 756,
+    "sign_test_p_value": 1.2146708022957309e-05,
+    "verdict": "Beat buy-and-hold more often than chance would explain on these paths."
+  },
+  "challenge": {
+    "commitment": "3f56972b0230824e0a777b50d339949481239ebb1bc444bc38b68e2c0359ad07",
+    "seed_status": "fresh random; revealed in SEED-REVEAL.txt after this run",
+    "kit_fingerprint": "5c90bf815848f4edd85bb2446e00382a24f003d936b3bad72f297a3b7885dad9",
+    "provenance": {
+      "project": "/Users/simbashakib/Desktop/Alpha Audit",
+      "files_scanned": 13,
+      "adapter_command": [
+        "python3",
+        "adapter.py"
+      ],
+      "adapter_file_sha256": {
+        "adapter.py": "f3a116d3a49fcc84b5ed494a07892e90690029088c4d136a0e89ab3fdef9a013"
+      },
+      "git_head": null,
+      "git_dirty_files": 55,
+      "warnings": []
+    }
+  },
+  "limits": "Passing defined checks does not validate an entire product. Market completion is not profitability. Synthetic data is not a real-world benchmark. This runner is not an OS security sandbox."
+}

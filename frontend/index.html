@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alpha Auditor</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23059669' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18' stroke='%2378716c'/%3E%3Cpath d='M7 15l4-5 4 3 5-7'/%3E%3Ccircle cx='20' cy='6' r='2' fill='%23059669' stroke='none'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="/static/styles.css?v=4" />
+</head>
+<body>
+
+  <!-- Minimalist Header -->
+  <header class="terminal-header">
+    <div class="brand-block">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18" stroke-opacity="0.45"/>
+          <path d="M7 15l4-5 4 3 5-7" stroke="var(--accent-emerald)" stroke-width="2.2"/>
+          <circle cx="20" cy="6" r="2" fill="var(--accent-emerald)" stroke="none"/>
+        </svg>
+      </div>
+      <div class="brand-title">Alpha Auditor</div>
+    </div>
+    <div class="header-right-info">
+      <button type="button" id="btn-theme-toggle" class="btn btn-secondary theme-toggle-btn">
+        <span id="theme-toggle-label">Dark mode</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Primary Navigation Bar -->
+  <nav class="workbench-nav" aria-label="Research Workflow Steps">
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-target="view-step-1" id="tab-btn-step-1">
+        1. Hypothesis
+      </button>
+      <button class="nav-tab" data-target="view-step-2" id="tab-btn-step-2">
+        2. Configuration
+      </button>
+      <button class="nav-tab" data-target="view-step-3" id="tab-btn-step-3">
+        3. Literature
+      </button>
+      <button class="nav-tab" data-target="view-step-4" id="tab-btn-step-4">
+        4. Performance
+      </button>
+      <button class="nav-tab" data-target="view-step-5" id="tab-btn-step-5">
+        5. Stress Tests
+      </button>
+      <button class="nav-tab" data-target="view-step-6" id="tab-btn-step-6">
+        6. Report &amp; PDF
+      </button>
+    </div>
+  </nav>
+
+  <main class="workspace-container">
+
+    <!-- =====================================================================
+         STEP 1: CONVERSATIONAL HYPOTHESIS INPUT
+         ===================================================================== -->
+    <section id="view-step-1" class="view-panel active">
+      <div class="chat-stage-wrap">
+        <div class="step-intro-bar">
+          <div>
+            <div class="step-intro-title">Research Hypothesis</div>
+            <div class="step-intro-desc">
+              Describe a market hypothesis in plain English to translate it into a reproducible backtest.
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-card">
+          <div id="chat-thread" class="chat-thread">
+            <div class="chat-msg assistant" id="chat-welcome-msg">
+              <div class="chat-bubble">
+                <div class="chat-sender">Alpha Auditor</div>
+                <div>
+                  Describe a trading hypothesis you want to test — such as how an asset behaves after a sharp daily drop or multi-day streak, or whether two related stocks converge after diverging.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="preset-container" class="preset-bar"></div>
+
+          <div class="chat-composer">
+            <textarea
+              id="hypothesis-input"
+              class="chat-input"
+              rows="2"
+              placeholder="Enter a trading hypothesis..."
+            ></textarea>
+            <button id="btn-compile-hypothesis" class="btn btn-primary chat-send-btn">
+              Send
+            </button>
+          </div>
+        </div>
+
+        <!-- Hidden legacy containers -->
+        <div id="gemini-reply-box" style="display:none;"></div>
+        <div id="unsupported-alert" style="display:none;"><div id="unsupported-reason-text"></div></div>
+        <div id="steered-section" style="display:none;"><div id="steered-cards-container"></div></div>
+        <div id="chat-step2-cta" style="display:none;"><button type="button" id="btn-goto-step-2"></button></div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         STEP 2: STRATEGY CONFIGURATION
+         ===================================================================== -->
+    <section id="view-step-2" class="view-panel">
+      <div class="narrow-stage-wrap">
+        <div class="step-intro-bar">
+          <div>
+            <div class="step-intro-title">Strategy Configuration</div>
+            <div class="step-intro-desc">
+              Review the parsed specification or adjust parameters across the tabs.
+            </div>
+          </div>
+          <div class="subtab-bar" data-group="step2-params">
+            <button type="button" class="subtab-btn active" data-subtarget="step2-sub-summary">Summary</button>
+            <button type="button" class="subtab-btn" data-subtarget="step2-sub-signal">Assets &amp; Signal</button>
+            <button type="button" class="subtab-btn" data-subtarget="step2-sub-thresholds">Thresholds</button>
+            <button type="button" class="subtab-btn" data-subtarget="step2-sub-execution">Execution &amp; Risk</button>
+            <button type="button" class="subtab-btn" data-subtarget="step2-sub-notes">Notes</button>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-body">
+
+            <!-- Sub-tab 2.0: Summary & Threshold Mode -->
+            <div id="step2-sub-summary" class="subtab-panel active" data-group="step2-params">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <div class="section-kicker" style="margin-bottom:0;">Parsed Specification</div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <span id="compiler-status-badge" class="subtle-tag">Mode: Deterministic Rules</span>
+                  <span id="compiler-model-tag" class="subtle-tag">Compiler: deterministic-spec-compiler-v2</span>
+                </div>
+              </div>
+              <div class="quant-table-wrap" style="margin-bottom:20px;">
+                <table class="quant-table" id="understood-summary-table">
+                  <thead>
+                    <tr>
+                      <th style="width:26%;">Dimension</th>
+                      <th>Rule</th>
+                      <th style="width:20%;">Provenance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Status</strong></td>
+                      <td>Enter a hypothesis in the Hypothesis tab to populate parameters.</td>
+                      <td>—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div id="user-vs-defaults-container" class="provenance-split-box" style="display:none; margin-bottom:24px;"></div>
+
+              <div id="ambiguity-container" class="ambiguity-box" style="display:none; margin-bottom:28px;">
+                <div class="section-kicker" style="margin-bottom:10px;">Parameter Options &amp; Analytical Lenses</div>
+                <div id="ambiguity-list"></div>
+              </div>
+
+              <div class="section-kicker">Threshold Mode</div>
+              <div class="threshold-mode-grid" style="margin-bottom:0;">
+                <div class="threshold-mode-card active" id="mode-card-specific" data-mode="user_specified">
+                  <div class="mode-card-title">Specific Thresholds</div>
+                  <div class="mode-card-desc">
+                    Test the exact entry/exit thresholds and holding period configured in this specification.
+                  </div>
+                </div>
+                <div class="threshold-mode-card" id="mode-card-bracket" data-mode="auto_standard_bracket">
+                  <div class="mode-card-title">Standard Literature Bracket</div>
+                  <div class="mode-card-desc">
+                    Automatically test Aggressive, Baseline, and Conservative thresholds side by side.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-tab 2.1: Assets & Signal -->
+            <div id="step2-sub-signal" class="subtab-panel" data-group="step2-params">
+              <div class="formula-banner" id="active-formula-banner">
+                Signal Formula: R_{t,k} = (C_t / C_{t-k} - 1) × 100 &lt;= -θ%
+              </div>
+              <div class="form-grid" style="margin-bottom:22px;">
+                <div class="form-group">
+                  <label class="form-label" for="spec-title">Title</label>
+                  <input type="text" id="spec-title" class="form-input" value="" placeholder="Populated from hypothesis" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-family">Strategy Family</label>
+                  <select id="spec-family" class="form-select">
+                    <option value="single_asset">Single Asset</option>
+                    <option value="pairs_trading">Two-Asset Pairs</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-template">Template</label>
+                  <select id="spec-template" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-variant">Signal Variant</label>
+                  <select id="spec-variant" class="form-select"></select>
+                </div>
+              </div>
+
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label class="form-label" for="spec-asset-a">Primary Asset</label>
+                  <div class="ticker-input-row">
+                    <input type="text" id="spec-asset-a" class="form-input" list="catalog-tickers-list" value="SPY" />
+                    <button type="button" class="btn btn-secondary" id="btn-validate-a">Verify</button>
+                  </div>
+                  <div id="status-asset-a" class="ticker-status ok">Verified</div>
+                </div>
+
+                <div class="form-group" id="group-asset-b" style="display:none;">
+                  <label class="form-label" for="spec-asset-b">Secondary Asset (Pairs)</label>
+                  <div class="ticker-input-row">
+                    <input type="text" id="spec-asset-b" class="form-input" list="catalog-tickers-list" value="PEP" />
+                    <button type="button" class="btn btn-secondary" id="btn-validate-b">Verify</button>
+                  </div>
+                  <div id="status-asset-b" class="ticker-status">Pair leg B</div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="spec-benchmark">Benchmark</label>
+                  <div class="ticker-input-row">
+                    <input type="text" id="spec-benchmark" class="form-input" list="catalog-tickers-list" value="SPY" />
+                    <button type="button" class="btn btn-secondary" id="btn-validate-bench">Verify</button>
+                  </div>
+                  <div id="status-benchmark" class="ticker-status ok">Baseline</div>
+                </div>
+              </div>
+              <datalist id="catalog-tickers-list"></datalist>
+            </div>
+
+            <!-- Sub-tab 2.2: Thresholds & Holding -->
+            <div id="step2-sub-thresholds" class="subtab-panel" data-group="step2-params">
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label class="form-label" for="spec-entry-thresh"><span id="lbl-entry-thresh">Entry Threshold (% or σ)</span></label>
+                  <input type="number" step="0.1" id="spec-entry-thresh" class="form-input" value="2.0" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-exit-thresh"><span id="lbl-exit-thresh">Exit Threshold (% or σ)</span></label>
+                  <input type="number" step="0.1" id="spec-exit-thresh" class="form-input" value="0.0" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-lookback"><span id="lbl-lookback">Lookback Window (Days)</span></label>
+                  <input type="number" step="1" min="1" max="500" id="spec-lookback" class="form-input" value="1" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-secondary-window"><span id="lbl-secondary-win">Secondary Window (Days)</span></label>
+                  <input type="number" step="1" min="2" max="750" id="spec-secondary-window" class="form-input" value="50" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-streak">Streak Length (Days)</label>
+                  <input type="number" step="1" min="1" max="20" id="spec-streak" class="form-input" value="3" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-holding-period">Holding Period (Days)</label>
+                  <input type="number" step="1" min="1" max="252" id="spec-holding-period" class="form-input" value="1" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-exit-mode">Exit Rule</label>
+                  <select id="spec-exit-mode" class="form-select">
+                    <option value="fixed_hold">Fixed Holding Period</option>
+                    <option value="threshold_reversion">Threshold Convergence</option>
+                    <option value="first_positive_close">First Profitable Close</option>
+                    <option value="signal_reversal">Opposite Signal</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-direction">Direction</label>
+                  <select id="spec-direction" class="form-select">
+                    <option value="long">Long Only</option>
+                    <option value="short">Short Only</option>
+                    <option value="both">Long / Short</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-stop-z">Stop Z-Score (σ)</label>
+                  <input type="number" step="0.25" min="1.0" max="10.0" id="spec-stop-z" class="form-input" value="4.0" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-tab 2.3: Execution & Risk -->
+            <div id="step2-sub-execution" class="subtab-panel" data-group="step2-params">
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label class="form-label" for="spec-start-date">Start Date</label>
+                  <input type="date" id="spec-start-date" class="form-input" value="2018-01-01" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-end-date">End Date</label>
+                  <input type="date" id="spec-end-date" class="form-input" value="2025-12-31" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-split-ratio">In-Sample Ratio</label>
+                  <select id="spec-split-ratio" class="form-select">
+                    <option value="0.5">50% In-Sample / 50% Out-of-Sample</option>
+                    <option value="0.6">60% In-Sample / 40% Out-of-Sample</option>
+                    <option value="0.7">70% In-Sample / 30% Out-of-Sample</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-exec-timing">Execution Fill (t+1)</label>
+                  <select id="spec-exec-timing" class="form-select">
+                    <option value="next_open">Next-Day Open</option>
+                    <option value="next_close">Next-Day Close</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-comm-bps">Commission (bps/leg)</label>
+                  <input type="number" step="1" min="0" max="200" id="spec-comm-bps" class="form-input" value="5" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-slip-bps">Slippage (bps/leg)</label>
+                  <input type="number" step="1" min="0" max="200" id="spec-slip-bps" class="form-input" value="5" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-max-dd">Max Drawdown Limit (%)</label>
+                  <input type="number" step="1" min="2" max="95" id="spec-max-dd" class="form-input" value="25" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-stop-loss">Trade Stop-Loss (%)</label>
+                  <input type="number" step="0.5" min="1" max="90" id="spec-stop-loss" class="form-input" value="15" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="spec-capital">Initial Capital ($)</label>
+                  <input type="number" step="10000" min="1000" id="spec-capital" class="form-input" value="100000" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub-tab 2.4: Notes -->
+            <div id="step2-sub-notes" class="subtab-panel" data-group="step2-params">
+              <ul id="interpretation-notes-list" class="methodology-list"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modified Since Last Run Banner -->
+        <div id="spec-modified-banner" class="formula-banner" style="display:none; margin-bottom:14px; font-family:var(--font-sans); font-size:13px;"></div>
+
+        <!-- Confirmation Gate -->
+        <div class="confirmation-gate">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-human-confirm" />
+            <span>
+              I confirm this specification and approve running the historical audit.
+            </span>
+          </label>
+          <button id="btn-run-audit" class="btn btn-emerald" disabled>
+            Confirm &amp; Run Audit
+          </button>
+        </div>
+        <div id="run-error-banner" style="display:none; margin-top:12px; color:var(--accent-rose); font-family:var(--font-mono); font-size:12px;"></div>
+
+        <div class="step-footer-nav">
+          <button type="button" class="btn btn-secondary" onclick="switchTab('view-step-1')">
+            Back
+          </button>
+          <button type="button" class="btn btn-primary" onclick="switchTab('view-step-3')">
+            Next: Literature
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         STEP 3: ACADEMIC LITERATURE
+         ===================================================================== -->
+    <section id="view-step-3" class="view-panel">
+      <div class="narrow-stage-wrap">
+        <div class="step-intro-bar">
+          <div>
+            <div class="step-intro-title">Academic Literature</div>
+            <div class="step-intro-desc">
+              Theoretical mechanism, peer-reviewed studies, and active econometric safeguards.
+            </div>
+          </div>
+          <div class="subtab-bar" data-group="step3-lit">
+            <button type="button" class="subtab-btn active" data-subtarget="step3-sub-overview">Overview</button>
+            <button type="button" class="subtab-btn" data-subtarget="step3-sub-strategy">Strategy Papers</button>
+            <button type="button" class="subtab-btn" data-subtarget="step3-sub-rigor">Safeguards</button>
+          </div>
+        </div>
+
+        <div id="step3-sub-overview" class="subtab-panel active" data-group="step3-lit">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Theoretical Mechanism</div>
+            </div>
+            <div class="panel-body">
+              <div id="lit-mechanism-summary" class="formula-banner" style="font-family:var(--font-sans); font-size:14px; color:var(--text-primary);">
+                Run an audit in Configuration to populate the academic literature review.
+              </div>
+              <div id="lit-gemini-synthesis" class="gemini-chat-bubble" style="display:none; margin-bottom:0;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="step3-sub-strategy" class="subtab-panel" data-group="step3-lit">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Foundational Papers</div>
+            </div>
+            <div class="panel-body" id="lit-strategy-papers"></div>
+          </div>
+        </div>
+
+        <div id="step3-sub-rigor" class="subtab-panel" data-group="step3-lit">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Active Backtesting Safeguards</div>
+            </div>
+            <div class="panel-body quant-table-wrap" style="padding:0;">
+              <table class="quant-table" id="lit-rigor-table">
+                <thead>
+                  <tr>
+                    <th>Safeguard</th>
+                    <th>Status</th>
+                    <th>Implementation</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Econometric Methodology Papers</div>
+            </div>
+            <div class="panel-body" id="lit-methodology-papers"></div>
+          </div>
+        </div>
+
+        <div class="step-footer-nav">
+          <button type="button" class="btn btn-secondary" onclick="switchTab('view-step-2')">
+            Back
+          </button>
+          <button type="button" class="btn btn-primary" onclick="switchTab('view-step-4')">
+            Next: Performance
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         STEP 4: PERFORMANCE & RISK ANALYSIS
+         ===================================================================== -->
+    <section id="view-step-4" class="view-panel">
+      <div class="step-intro-bar">
+        <div>
+          <div class="step-intro-title">Performance &amp; Risk</div>
+          <div class="step-intro-desc">
+            Historical equity curves, threshold brackets, holdout splits, and econometric inference.
+          </div>
+        </div>
+        <div class="subtab-bar" data-group="step4-perf">
+          <button type="button" class="subtab-btn active" data-subtarget="step4-sub-charts">Charts</button>
+          <button type="button" class="subtab-btn" data-subtarget="step4-sub-thresholds">Thresholds</button>
+          <button type="button" class="subtab-btn" data-subtarget="step4-sub-splits">Holdout Split</button>
+          <button type="button" class="subtab-btn" data-subtarget="step4-sub-grid">Parameter Grid</button>
+          <button type="button" class="subtab-btn" data-subtarget="step4-sub-stats">Econometrics</button>
+        </div>
+      </div>
+
+      <!-- Immediate Plain-English Verdict & Action Banner -->
+      <div id="step4-verdict-banner" class="verdict-top-banner" style="display:none;"></div>
+
+      <!-- Headline KPI Strip (Primary OOS + Secondary Full-Sample Context) -->
+      <div class="kpi-strip" id="kpi-strip-container"></div>
+
+      <!-- Sub-tab 4.1: Equity Curve & Drawdown Chart -->
+      <div id="step4-sub-charts" class="subtab-panel active" data-group="step4-perf">
+        <div id="equity-chart-summary" class="chart-takeaway-banner" style="display:none;"></div>
+        <div class="grid-2">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Cumulative Portfolio Equity ($)</div>
+              <label class="bracket-toggle-label">
+                <input type="checkbox" id="chk-show-brackets" />
+                <span>Show 3-bracket overlay</span>
+              </label>
+            </div>
+            <div class="panel-body" style="padding:16px;">
+              <div id="chart-equity" class="chart-box" role="img" aria-label="Cumulative Portfolio Equity Curve"></div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Underwater Drawdown (%)</div>
+            </div>
+            <div class="panel-body" style="padding:16px;">
+              <div id="chart-drawdown" class="chart-box" role="img" aria-label="Underwater Drawdown Trajectory"></div>
+            </div>
+          </div>
+        </div>
+
+        <details class="accessible-chart-details">
+          <summary>Accessible Numeric Chart Summary (Screen Reader &amp; Tabular View)</summary>
+          <div id="accessible-chart-table-wrap" class="quant-table-wrap" style="margin-top:12px;"></div>
+        </details>
+      </div>
+
+      <!-- Sub-tab 4.2: Threshold Bracket & Live Tuner -->
+      <div id="step4-sub-thresholds" class="subtab-panel" data-group="step4-perf">
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title">Threshold Bracket Comparison</div>
+            <span id="bracket-mode-badge" class="panel-badge emerald" style="display:none;"></span>
+          </div>
+          <div class="panel-body quant-table-wrap" style="padding:0;">
+            <table class="quant-table" id="bracket-comparison-table">
+              <thead>
+                <tr>
+                  <th>Profile</th>
+                  <th>Rule</th>
+                  <th class="num">Trades</th>
+                  <th class="num">In-Sample SR</th>
+                  <th class="num">Held-Out OOS SR</th>
+                  <th class="num">Full SR</th>
+                  <th class="num">Net Return</th>
+                  <th class="num">Max Drawdown</th>
+                  <th class="num">Win Rate</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="threshold-explorer-bar">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div class="panel-title">Interactive Parameter Tuner (Exploratory Mode)</div>
+              <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
+                Repeatedly tuning parameters against the holdout split increases selection bias (tracked in DSR &amp; holdout touch counter).
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <span id="holdout-touch-badge" class="subtle-tag">Holdout Touches: 1</span>
+              <span id="live-sweep-status" style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);"></span>
+              <button id="btn-recompute-live" class="btn btn-primary" disabled>
+                Recompute (Exploratory)
+              </button>
+            </div>
+          </div>
+
+          <div class="form-grid-3 tuner-grid-6">
+            <div class="slider-group">
+              <label class="form-label" for="live-variant"><span>Variant</span></label>
+              <select id="live-variant" class="form-select"></select>
+            </div>
+            <div class="slider-group">
+              <label class="form-label" for="live-entry-thresh"><span>Entry</span><strong id="val-live-entry">2.0</strong></label>
+              <input type="number" step="0.1" id="live-entry-thresh" class="form-input" value="2.0" />
+            </div>
+            <div class="slider-group">
+              <label class="form-label" for="live-exit-thresh"><span>Exit</span><strong id="val-live-exit">0.0</strong></label>
+              <input type="number" step="0.1" id="live-exit-thresh" class="form-input" value="0.0" />
+            </div>
+            <div class="slider-group">
+              <label class="form-label" for="live-lookback"><span>Lookback</span><strong id="val-live-lookback">20</strong></label>
+              <input type="number" step="1" min="1" max="500" id="live-lookback" class="form-input" value="20" />
+            </div>
+            <div class="slider-group">
+              <label class="form-label" for="live-holding"><span>Hold (d)</span><strong id="val-live-hold">5</strong></label>
+              <input type="number" step="1" min="1" max="252" id="live-holding" class="form-input" value="5" />
+            </div>
+            <div class="slider-group">
+              <label class="form-label" for="live-cost-bps"><span>Cost (bps)</span><strong id="val-live-cost">10</strong></label>
+              <input type="number" step="1" min="0" max="200" id="live-cost-bps" class="form-input" value="10" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-tab 4.3: In-Sample vs. Out-of-Sample Split -->
+      <div id="step4-sub-splits" class="subtab-panel" data-group="step4-perf">
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title">In-Sample vs. Held-Out Out-of-Sample</div>
+            <span id="split-date-badge" class="subtle-tag"></span>
+          </div>
+          <div class="panel-body quant-table-wrap" style="padding:0;">
+            <table class="quant-table" id="split-comparison-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th class="num">In-Sample</th>
+                  <th class="num">Out-of-Sample</th>
+                  <th class="num">Full Sample</th>
+                  <th class="num">Benchmark</th>
+                  <th>Definition</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title" id="signal-chart-title">Signal Trajectory &amp; Triggered Trades</div>
+          </div>
+          <div class="panel-body" style="padding:16px;">
+            <div id="signal-chart-summary" class="chart-takeaway-banner" style="display:none; margin-bottom:12px;"></div>
+            <div id="chart-signal" class="chart-box-sm" role="img" aria-label="Signal Trajectory and Trigger Thresholds"></div>
+          </div>
+        </div>
+
+        <div class="panel-card" id="pairs-econometrics-panel" style="display:none;">
+          <div class="panel-header">
+            <div class="panel-title">Cointegration &amp; Spread Stationarity</div>
+          </div>
+          <div class="panel-body">
+            <div id="pairs-coint-banner" class="formula-banner"></div>
+            <div class="grid-2">
+              <div class="quant-table-wrap">
+                <table class="quant-table" id="pairs-diag-table">
+                  <thead>
+                    <tr>
+                      <th>Diagnostic</th>
+                      <th class="num">Estimate</th>
+                      <th>Interpretation</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div>
+                <div id="chart-pairs-rebased" class="chart-box-sm"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-tab 4.4: 25-Trial Parameter Grid -->
+      <div id="step4-sub-grid" class="subtab-panel" data-group="step4-perf">
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title">Parameter Sensitivity Surface (25 Trials)</div>
+            <span id="dsr-badge" class="subtle-tag"></span>
+          </div>
+          <div class="panel-body">
+            <div id="dsr-methodology-banner" class="formula-banner"></div>
+            <div class="grid-2">
+              <div>
+                <div id="chart-sensitivity-heatmap" class="chart-box"></div>
+              </div>
+              <div class="quant-table-wrap" style="max-height:360px; overflow-y:auto;">
+                <table class="quant-table" id="sensitivity-grid-table">
+                  <thead>
+                    <tr>
+                      <th id="th-param-x">Param X</th>
+                      <th id="th-param-y">Param Y</th>
+                      <th class="num">Trades</th>
+                      <th class="num">IS SR</th>
+                      <th class="num">OOS SR</th>
+                      <th class="num">Full SR</th>
+                      <th class="num">Net Return</th>
+                      <th class="num">Max DD</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-tab 4.5: Bootstrap CIs, Alpha & Costs -->
+      <div id="step4-sub-stats" class="subtab-panel" data-group="step4-perf">
+        <div class="grid-2">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Stationary Bootstrap 95% Confidence Intervals</div>
+            </div>
+            <div class="panel-body quant-table-wrap" style="padding:0;">
+              <table class="quant-table" id="bootstrap-table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th class="num">Estimate</th>
+                    <th class="num">95% CI Lower</th>
+                    <th class="num">95% CI Upper</th>
+                    <th class="num">Bootstrap SE</th>
+                    <th class="num">Block</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Benchmark Alpha &amp; Beta (Newey-West HAC)</div>
+            </div>
+            <div class="panel-body quant-table-wrap" style="padding:0;">
+              <table class="quant-table" id="factor-reg-table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th class="num">Estimate</th>
+                    <th class="num">HAC t-Stat / p-Val</th>
+                    <th>Meaning</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Transaction Cost Sensitivity</div>
+              <span id="breakeven-badge" class="subtle-tag"></span>
+            </div>
+            <div class="panel-body">
+              <div id="chart-cost-sensitivity" class="chart-box-sm"></div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Subperiod Performance</div>
+            </div>
+            <div class="panel-body quant-table-wrap" style="padding:0;">
+              <table class="quant-table" id="subperiod-table">
+                <thead>
+                  <tr>
+                    <th>Subperiod</th>
+                    <th class="num">Trades</th>
+                    <th class="num">Strategy Net %</th>
+                    <th class="num">Benchmark %</th>
+                    <th class="num">Excess %</th>
+                    <th class="num">Sharpe</th>
+                    <th class="num">Max DD %</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-footer-nav">
+        <button type="button" class="btn btn-secondary" onclick="switchTab('view-step-3')">
+          Back
+        </button>
+        <button type="button" class="btn btn-primary" onclick="switchTab('view-step-5')">
+          Next: Stress Tests
+        </button>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         STEP 5: ADVERSARIAL STRESS TESTS
+         ===================================================================== -->
+    <section id="view-step-5" class="view-panel">
+      <div class="narrow-stage-wrap">
+        <div class="step-intro-bar">
+          <div>
+            <div class="step-intro-title">Adversarial Stress Tests</div>
+            <div class="step-intro-desc">
+              Evaluate robustness across outlier removal, execution delay, volatility regimes, and Monte Carlo random entries.
+            </div>
+          </div>
+          <span id="stress-summary-badge" class="subtle-tag" style="display:none;"></span>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-body">
+            <div id="stress-gemini-overview" class="gemini-chat-bubble" style="margin-bottom:18px;">
+              Run an audit in Configuration to execute the stress tests.
+            </div>
+            <div id="stress-tabs-nav" class="subtab-bar" style="display:none; justify-content:flex-start;"></div>
+          </div>
+        </div>
+
+        <div id="stress-tests-container"></div>
+
+        <div class="step-footer-nav">
+          <button type="button" class="btn btn-secondary" onclick="switchTab('view-step-4')">
+            Back
+          </button>
+          <button type="button" class="btn btn-emerald" onclick="switchTab('view-step-6')">
+            Next: Report &amp; PDF
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         STEP 6: FINAL VERDICT & JUPYTER NOTEBOOK PDF
+         ===================================================================== -->
+    <section id="view-step-6" class="view-panel">
+      <div class="narrow-stage-wrap">
+        <div class="step-intro-bar">
+          <div>
+            <div class="step-intro-title">Empirical Report &amp; Calculation Notebook</div>
+            <div class="step-intro-desc">
+              Summary of historical findings, mathematical derivations, and downloadable Jupyter Notebook (.ipynb &amp; PDF).
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="btn-download-notebook-ipynb" class="btn btn-secondary">
+              Download Calculation Notebook (.ipynb)
+            </button>
+            <button type="button" id="btn-download-notebook-pdf" class="btn btn-emerald">
+              Download Notebook PDF
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="panel-title">Executive Summary</div>
+            <span id="scorecard-verdict-badge" class="panel-badge emerald" style="display:none;"></span>
+          </div>
+          <div class="panel-body">
+            <div class="scorecard-banner" style="margin-bottom:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:10px;">
+                <div style="font-family:var(--font-sans); font-size:15px; font-weight:600; color:var(--text-primary);" id="scorecard-hypothesis-title">
+                  Hypothesis Evaluation
+                </div>
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);" id="scorecard-checks-counter"></div>
+              </div>
+              <div id="scorecard-exec-summary" style="font-size:14px; color:var(--text-primary); margin-bottom:12px; line-height:1.65;"></div>
+              <ul id="scorecard-takeaways" class="methodology-list"></ul>
+            </div>
+
+            <div id="hypothesis-comparison-container" style="display:none; margin-bottom:20px;"></div>
+
+            <div id="step6-clarity-strip" class="clarity-strip-grid"></div>
+          </div>
+        </div>
+
+        <div class="subtab-bar" data-group="step6-final" style="margin-bottom:24px;">
+          <button type="button" class="subtab-btn active" data-subtarget="step6-sub-scorecard">Scorecard</button>
+          <button type="button" class="subtab-btn" data-subtarget="step6-sub-notebook">Notebook &amp; Math</button>
+          <button type="button" class="subtab-btn" data-subtarget="step6-sub-blotter">Trade Blotter</button>
+        </div>
+
+        <!-- Sub-tab 6.1: Scorecard -->
+        <div id="step6-sub-scorecard" class="subtab-panel active" data-group="step6-final">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Empirical Verification Checks</div>
+            </div>
+            <div class="panel-body">
+              <div id="scorecard-dimensions-grid" class="grid-3" style="grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));"></div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">Methodology</div>
+              </div>
+              <div class="panel-body">
+                <ul id="methodology-notes-list" class="methodology-list"></ul>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">Assumptions &amp; Limitations</div>
+              </div>
+              <div class="panel-body">
+                <ul id="limitations-list" class="methodology-list"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-tab 6.2: Notebook View -->
+        <div id="step6-sub-notebook" class="subtab-panel" data-group="step6-final">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Jupyter Notebook Methodology &amp; Calculations</div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" onclick="downloadNotebookIpynb()">
+                  Download .ipynb
+                </button>
+                <button type="button" class="btn btn-primary" onclick="downloadNotebookPDF()">
+                  Download PDF
+                </button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="calculation-steps-container" style="margin-bottom:24px;"></div>
+              <div id="jupyter-notebook-preview" class="nb-preview-container"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-tab 6.3: Trade Blotter -->
+        <div id="step6-sub-blotter" class="subtab-panel" data-group="step6-final">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Historical Trade Blotter</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <select id="filter-trade-split" class="form-select" aria-label="Filter trade blotter by sample split" style="width:auto; padding:6px 10px; font-size:12px;">
+                  <option value="all">All Splits</option>
+                  <option value="out_of_sample">Out-of-Sample Only</option>
+                  <option value="in_sample">In-Sample Only</option>
+                </select>
+                <button id="btn-export-trades-csv" class="btn btn-secondary">
+                  Export CSV
+                </button>
+                <button id="btn-export-json" class="btn btn-secondary">
+                  Export JSON
+                </button>
+              </div>
+            </div>
+            <div class="panel-body quant-table-wrap" style="padding:0; max-height:440px; overflow-y:auto;">
+              <table class="quant-table" id="trades-blotter-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Split</th>
+                    <th>Direction</th>
+                    <th>Signal Date</th>
+                    <th class="num">Signal</th>
+                    <th>Entry Date</th>
+                    <th class="num">Entry A</th>
+                    <th class="num">Entry B</th>
+                    <th>Exit Date</th>
+                    <th class="num">Exit A</th>
+                    <th class="num">Exit B</th>
+                    <th class="num">Hold</th>
+                    <th class="num">Gross %</th>
+                    <th class="num">Cost %</th>
+                    <th class="num">Net %</th>
+                    <th>Exit Rule</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Data Provenance</div>
+            </div>
+            <div class="panel-body">
+              <div id="provenance-grid" class="grid-3"></div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <div class="panel-title">Standalone Walk-Forward Stepper Benchmark Evidence (Component Scope)</div>
+              <span class="subtle-tag">Scope: engine/walk_forward_stepper.py</span>
+            </div>
+            <div class="panel-body" id="challenge-evidence-container"></div>
+          </div>
+        </div>
+
+        <div class="step-footer-nav">
+          <button type="button" class="btn btn-secondary" onclick="switchTab('view-step-5')">
+            Back
+          </button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="downloadNotebookIpynb()">
+              Download Calculation Notebook (.ipynb)
+            </button>
+            <button type="button" class="btn btn-emerald" onclick="downloadNotebookPDF()">
+              Download Notebook PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
