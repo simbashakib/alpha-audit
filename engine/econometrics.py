@@ -11,10 +11,8 @@
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import numpy as np
-import pandas as pd
 from scipy import stats
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import adfuller, coint
@@ -348,6 +346,8 @@ def compute_pairs_econometrics(
     log_a = np.log(np.asarray(close_a_form, dtype=np.float64))
     log_b = np.log(np.asarray(close_b_form, dtype=np.float64))
 
+    if np.ptp(log_a) < 1e-12 or np.ptp(log_b) < 1e-12:
+        raise ValueError("Cointegration requires two varying formation price series.")
     X = sm.add_constant(log_b)
     ols_res = sm.OLS(log_a, X).fit()
     alpha = float(ols_res.params[0])
@@ -363,18 +363,18 @@ def compute_pairs_econometrics(
     lvl_corr = float(np.corrcoef(close_a_form, close_b_form)[0, 1]) if len(close_a_form) > 2 else 0.0
 
     # Augmented Dickey-Fuller test on the formation spread S_t
+    if np.ptp(spread_form) < 1e-12:
+        raise ValueError("Spread diagnostics require variation in the formation residuals.")
     adf_res = adfuller(spread_form, autolag="AIC")
     adf_stat = float(adf_res[0])
     adf_p = float(adf_res[1])
     adf_crit = {k: round(float(v), 3) for k, v in adf_res[4].items()}
 
     # Engle-Granger two-step cointegration test (MacKinnon critical values accounting for estimated beta)
-    try:
-        eg_stat, eg_p, _ = coint(log_a, log_b, trend="c", autolag="AIC")
-        eg_stat_f = float(eg_stat)
-        eg_p_f = float(eg_p)
-    except Exception:
-        eg_stat_f, eg_p_f = adf_stat, adf_p
+    eg_stat, eg_p, _ = coint(log_a, log_b, trend="c", autolag="AIC")
+    eg_stat_f, eg_p_f = float(eg_stat), float(eg_p)
+    if not np.isfinite([eg_stat_f, eg_p_f]).all():
+        raise ValueError("The formation series do not yield a finite Engle-Granger statistic.")
 
     # Ornstein-Uhlenbeck discrete AR(1): dS_t = c + lambda * S_{t-1} + eta_t
     s_lag = spread_form[:-1]

@@ -1249,7 +1249,6 @@ def _compile_hypothesis_deterministic(text: str, template: TemplateId | None = N
     )
 
 
-_INTERPRETATION_CACHE: dict[str, str] = {}
 
 
 def _mark_user_field(spec: StrategySpec, field_key: str) -> None:
@@ -1527,11 +1526,6 @@ def interpret_hypothesis(
         and has_fin_or_param_cue
     )
 
-    norm_key = " ".join(effective_text.strip().split()).lower()
-    cacheable = template is None and not prior_turns
-    if cacheable and norm_key in _INTERPRETATION_CACHE:
-        return InterpretationResponse.model_validate_json(_INTERPRETATION_CACHE[norm_key])
-
     baseline: InterpretationResponse | None = None
     if is_followup_refinement:
         prior_inputs = [t for t in compiler_history if t.role == "user" and t.content.strip()]
@@ -1570,6 +1564,4 @@ def interpret_hypothesis(
     ]
     baseline.chat_history = updated_history
 
-    if cacheable:
-        _INTERPRETATION_CACHE[norm_key] = baseline.model_dump_json()
     return baseline

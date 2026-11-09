@@ -8,10 +8,9 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from engine.backtester import load_audit_run, run_full_audit, save_audit_run
 from engine.data_provider import CATALOG_TICKERS, validate_ticker_symbol
@@ -31,17 +30,10 @@ app = FastAPI(
     version="2.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 class HypothesisRequest(BaseModel):
-    hypothesis_text: str
-    chat_history: list[ChatTurn] = []
+    hypothesis_text: str = Field(max_length=8000)
+    chat_history: list[ChatTurn] = Field(default_factory=list, max_length=128)
 
 
 TEMPLATE_METADATA: list[dict[str, Any]] = [
@@ -113,7 +105,7 @@ TEMPLATE_METADATA: list[dict[str, Any]] = [
         "template_id": "trend_breakout",
         "family": "single_asset",
         "name": "Moving-Average Regime & Channel Breakout",
-        "literature_ref": "Brock, Lakonishok & LeBaron (1992); Moskowitz, Ooi & Pedersen (2001)",
+        "literature_ref": "Brock, Lakonishok & LeBaron (1992); Moskowitz, Ooi & Pedersen (2012)",
         "variants": [
             {
                 "id": "sma_crossover",
@@ -270,18 +262,23 @@ def api_get_audit_pdf(run_id: str) -> Response:
     )
 
 
-@app.post("/api/audit/pdf")
-def api_post_audit_pdf(payload: dict[str, Any]) -> Response:
-    if "spec" in payload and "in_sample_metrics" in payload:
-        report = AuditReport.model_validate(payload)
-    else:
+def _report_for_export(payload: dict[str, Any]) -> AuditReport:
+    try:
+        if "spec" in payload and "in_sample_metrics" in payload:
+            return AuditReport.model_validate(payload)
         spec = StrategySpec.model_validate(payload)
         if not spec.human_confirmed:
-            raise HTTPException(
-                status_code=400,
-                detail="Human researcher confirmation is required before running or exporting an audit.",
-            )
-        report = run_full_audit(spec)
+            raise HTTPException(status_code=400, detail="Confirm the strategy before running an audit.")
+        return run_full_audit(spec)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_input=False, include_context=False)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/audit/pdf")
+def api_post_audit_pdf(payload: dict[str, Any]) -> Response:
+    report = _report_for_export(payload)
     pdf_bytes = render_jupyter_notebook_pdf(report)
     safe_id = "".join(c for c in report.run_id if c.isalnum() or c == "-") or "report"
     return Response(
@@ -312,16 +309,7 @@ def api_get_audit_ipynb(run_id: str) -> Response:
 
 @app.post("/api/audit/ipynb")
 def api_post_audit_ipynb(payload: dict[str, Any]) -> Response:
-    if "spec" in payload and "in_sample_metrics" in payload:
-        report = AuditReport.model_validate(payload)
-    else:
-        spec = StrategySpec.model_validate(payload)
-        if not spec.human_confirmed:
-            raise HTTPException(
-                status_code=400,
-                detail="Human researcher confirmation is required before running or exporting an audit.",
-            )
-        report = run_full_audit(spec)
+    report = _report_for_export(payload)
     ipynb_bytes = render_jupyter_notebook_ipynb(report)
     safe_id = "".join(c for c in report.run_id if c.isalnum() or c == "-") or "report"
     return Response(
@@ -335,7 +323,7 @@ def api_post_audit_ipynb(payload: dict[str, Any]) -> Response:
 
 @app.get("/api/challenge/summary")
 def api_challenge_summary() -> dict[str, Any]:
-    """Return official AgentVerse hidden challenge benchmark reports if present."""
+    """Return archived, self-serve AgentVerse challenge results if present."""
     out: dict[str, Any] = {}
     for key, folder in (
         ("real_markets", EVAL_DIR / "challenge-real-markets"),

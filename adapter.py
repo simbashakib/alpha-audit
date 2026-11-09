@@ -10,14 +10,9 @@ Connects the AgentVerse CLI runner to Alpha Auditor's deterministic engine:
 from __future__ import annotations
 
 import json
+import math
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-import numpy as np
 import pandas as pd
 
 from engine.backtester import compute_causal_signals, simulate_strategy_core
@@ -39,7 +34,7 @@ def _handle_audit_single_asset(data: dict) -> dict:
         or not isinstance(dates, list)
         or len(prices) != len(dates)
         or len(prices) < 10
-        or any(not isinstance(p, (int, float)) or p <= 0 for p in prices)
+        or any(isinstance(p, bool) or not isinstance(p, (int, float)) or not math.isfinite(p) or p <= 0 for p in prices)
     ):
         raise ValueError("Invalid prices or dates input")
 
@@ -110,8 +105,8 @@ def _handle_audit_pairs_spread(data: dict) -> dict:
         or len(prices_a) != len(dates)
         or len(prices_b) != len(dates)
         or len(prices_a) < 30
-        or any(not isinstance(p, (int, float)) or p <= 0 for p in prices_a)
-        or any(not isinstance(p, (int, float)) or p <= 0 for p in prices_b)
+        or any(isinstance(p, bool) or not isinstance(p, (int, float)) or not math.isfinite(p) or p <= 0 for p in prices_a)
+        or any(isinstance(p, bool) or not isinstance(p, (int, float)) or not math.isfinite(p) or p <= 0 for p in prices_b)
     ):
         raise ValueError("Invalid prices_a, prices_b, or dates input")
 
@@ -207,10 +202,14 @@ def main() -> None:
     for line in sys.stdin:
         if not line.strip():
             continue
-        request = json.loads(line)
-        output = solve(request)
+        try:
+            request = json.loads(line)
+        except ValueError:
+            request = None
+        request_id = request.get("request_id") if isinstance(request, dict) else None
+        output = solve(request) if request_id is not None else {"error": "invalid_input"}
         print(
-            json.dumps({"request_id": request["request_id"], "output": output}),
+            json.dumps({"request_id": request_id, "output": output}),
             flush=True,
         )
 

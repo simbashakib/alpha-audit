@@ -7,8 +7,6 @@ and details how Alpha Auditor's deterministic backtester guards against them.
 
 from __future__ import annotations
 
-import os
-from typing import Any
 
 from engine.guardrails import sanitize_research_notes
 from engine.schemas import (
@@ -398,21 +396,6 @@ METHODOLOGY_RIGOR_PAPERS: list[LiteraturePaper] = [
 ]
 
 
-_LIT_SYNTHESIS_CACHE: dict[str, str] = {}
-
-
-def _cached_literature_synthesis(
-    spec: StrategySpec,
-    base_synthesis: str,
-) -> str:
-    """Return the deterministic literature synthesis for the specification."""
-    cache_key = f"{spec.model_dump_json()}:{base_synthesis}"
-    if cache_key in _LIT_SYNTHESIS_CACHE:
-        return _LIT_SYNTHESIS_CACHE[cache_key]
-    _LIT_SYNTHESIS_CACHE[cache_key] = base_synthesis
-    return base_synthesis
-
-
 def build_literature_review(
     spec: StrategySpec,
     pairs_diag: PairsDiagnostics | None = None,
@@ -484,10 +467,10 @@ def build_literature_review(
             f"institutional herding can generate persistent medium-horizon price trends."
         )
         synthesis = (
-            f"Trend-following strategies typically exhibit positive return skewness—characterized by a lower "
-            f"win rate offset by a small number of large trend-capture trades—and vulnerability to sudden "
-            f"rebound crashes (Daniel & Moskowitz, 2016). Alpha Auditor decomposes returns into passive "
-            f"market beta versus Newey-West HAC alpha and stress-tests right-tail trade concentration."
+            "Trend-following strategies typically exhibit positive return skewness—characterized by a lower "
+            "win rate offset by a small number of large trend-capture trades—and vulnerability to sudden "
+            "rebound crashes (Daniel & Moskowitz, 2016). Alpha Auditor decomposes returns into passive "
+            "market beta versus Newey-West HAC alpha and stress-tests right-tail trade concentration."
         )
     else:
         coint_detail = ""
@@ -514,7 +497,6 @@ def build_literature_review(
             f"and enforces a |z| >= {spec.parameters.stop_z_threshold or 4.0:.1f} divergence stop-loss."
         )
 
-    synthesis = _cached_literature_synthesis(spec, synthesis)
 
     rigor_checklist: list[dict[str, str]] = [
         {

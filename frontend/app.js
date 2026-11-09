@@ -301,7 +301,7 @@ function renderPreAuditEmptyStates() {
 
   const execSum = document.getElementById('scorecard-exec-summary');
   if (execSum && !execSum.textContent.trim()) {
-    execSum.textContent = 'Run an audit in Step 2 (Configuration) to generate the empirical hypothesis verdict, 6-dimension scorecard, and step-by-step calculation ledger.';
+    execSum.textContent = 'Run an audit in Step 2 (Configuration) to generate the empirical hypothesis verdict, 5-dimension scorecard, and step-by-step calculation ledger.';
   }
   const clarityStrip = document.getElementById('step6-clarity-strip');
   if (clarityStrip && !clarityStrip.innerHTML.trim()) {
@@ -1330,7 +1330,7 @@ function syncStep2SummaryFromForm() {
   } else if (cur.template_id === 'trend_breakout') {
     entryRuleDesc = `Enter ${cur.parameters.direction.toUpperCase()} on ${cur.parameters.lookback_window}d / ${cur.parameters.secondary_window}d ${varLabel} (Buffer = ${cur.parameters.entry_threshold}%)`;
   } else if (cur.template_id === 'pairs_cointegration_reversion') {
-    entryRuleDesc = `Enter dollar-neutral spread when ${cur.parameters.lookback_window}-day Z-score |Z| ≥ ${cur.parameters.entry_threshold}σ (Exit |Z| ≤ ${cur.parameters.exit_threshold}σ, Stop |Z| ≥ ${cur.parameters.stop_z_threshold}σ)`;
+    entryRuleDesc = `Enter a hedge-weighted spread when ${cur.parameters.lookback_window}-day Z-score |Z| ≥ ${cur.parameters.entry_threshold}σ (Exit |Z| ≤ ${cur.parameters.exit_threshold}σ, Stop |Z| ≥ ${cur.parameters.stop_z_threshold}σ)`;
   } else {
     entryRuleDesc = `Threshold = ${cur.parameters.entry_threshold} | Lookback = ${cur.parameters.lookback_window}d`;
   }
@@ -1898,7 +1898,7 @@ const PREVIEW_STRATEGY_LITERATURE = {
   },
   pairs_cointegration_reversion: {
     mechanism:
-      'Statistical arbitrage pairs trading tests whether two economically linked assets share a stationary cointegrating equilibrium ln(P_A) - α - β ln(P_B) (Engle & Granger, 1987; Gatev, Goetzmann & Rouwenhorst, 2006), entering dollar-neutral long/short positions when the spread Z-score diverges.',
+      'Statistical arbitrage pairs trading tests whether two economically linked assets share a stationary cointegrating equilibrium ln(P_A) - α - β ln(P_B) (Engle & Granger, 1987; Gatev, Goetzmann & Rouwenhorst, 2006), entering hedge-weighted positions when the spread Z-score diverges.',
     papers: [
       {
         title: 'Co-Integration and Error Correction: Representation, Estimation, and Testing',
@@ -2968,8 +2968,9 @@ function renderStressTestsStep(report) {
   const summaryBadge = document.getElementById('stress-summary-badge');
   if (summaryBadge) {
     summaryBadge.style.display = 'inline-flex';
+    const missing = suite.tests.filter(t => t.outcome_badge === 'NO_EVIDENCE').length;
     summaryBadge.textContent =
-      `${suite.resilient_count}/5 RESILIENT · ${5 - suite.resilient_count - suite.vulnerability_count}/5 MODERATE · ${suite.vulnerability_count}/5 HIGH VULNERABILITY`;
+      `${suite.resilient_count}/5 RESILIENT · ${5 - suite.resilient_count - suite.vulnerability_count - missing}/5 MODERATE · ${suite.vulnerability_count}/5 HIGH VULNERABILITY · ${missing}/5 NO EVIDENCE`;
   }
 
   document.getElementById('stress-gemini-overview').innerHTML = `
@@ -3010,7 +3011,7 @@ function renderStressTestsStep(report) {
           ? 'badge-resilient'
           : t.outcome_badge === 'MODERATE_SENSITIVITY'
           ? 'badge-moderate'
-          : 'badge-vulnerable';
+          : t.outcome_badge === 'NO_EVIDENCE' ? 'badge-neutral' : 'badge-vulnerable';
 
       const rows = t.breakdown_rows || [];
       let tableHtml = '';

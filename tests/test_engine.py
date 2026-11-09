@@ -9,17 +9,13 @@ import pytest
 
 from engine.backtester import (
     compute_causal_signals,
-    compute_parameter_sensitivity_surface,
     run_full_audit,
     simulate_strategy_core,
 )
 from engine.econometrics import (
     compute_pairs_econometrics,
     deflated_sharpe_ratio_bailey_lopez,
-    lo_mackinlay_variance_ratio,
     lo_mertens_sharpe_se_and_psr,
-    newey_west_factor_regression,
-    stationary_bootstrap_cis,
 )
 from engine.guardrails import check_neutrality, sanitize_research_notes
 from engine.hypothesis_parser import interpret_hypothesis
@@ -56,7 +52,8 @@ def _make_toy_df(prices_a: list[float], prices_b: list[float] | None = None) -> 
     return df
 
 
-def test_exact_next_bar_execution_and_cost_accounting():
+@pytest.mark.parametrize("fill", ["next_open", "next_close"])
+def test_exact_next_bar_execution_and_cost_accounting(fill):
     """Verify signal at bar t executes at bar t+1 without look-ahead and deducts exact fees."""
     # Bar 2 drops from 100 to 97 (-3.0% <= -2.0% threshold).
     # Signal fires at close of bar 2 -> Entry at bar 3 (price 100.0) -> 1-day hold -> Exit at bar 4 (price 105.0, +5% gross).
@@ -79,7 +76,7 @@ def test_exact_next_bar_execution_and_cost_accounting():
         ),
         execution=ExecutionAssumptions(
             initial_capital=100_000.0,
-            execution_timing="next_open",
+            execution_timing=fill,
             commission_bps=10.0,
             slippage_bps=5.0,
         ),
@@ -336,8 +333,8 @@ def test_six_step_workflow_steering_literature_stress_and_scorecard():
     assert len(report.scorecard.calculation_steps) == 5
 
 
-def test_ten_questions_ten_times_deterministic_repeatability():
-    """Test 10 distinct questions across all methodologies 10 times each (100 runs total)
+def test_ten_questions_independent_repeatability():
+    """Test 10 distinct questions across all methodologies twice each with independent computations
     and assert 100% deterministic repeatability of both interpretation and backtest results.
     """
     ten_questions = [
@@ -413,24 +410,11 @@ def test_ten_questions_ten_times_deterministic_repeatability():
         ),
     ]
 
-    from engine.backtester import _AUDIT_REPORT_CACHE
-    from engine.hypothesis_parser import _INTERPRETATION_CACHE
-    from engine.literature import _LIT_SYNTHESIS_CACHE
-    from engine.stress_tests import _STRESS_OVERVIEW_CACHE
-
     for q_text, exp_family, exp_template, exp_variant, exp_asset_a in ten_questions:
         baseline_interp_json = None
         baseline_report_json = None
 
-        for rep in range(10):
-            if rep in (1, 5):
-                # Force uncached recomputations from scratch to prove underlying mathematical,
-                # timestamp, and RNG determinism in addition to cached repeatability
-                _INTERPRETATION_CACHE.clear()
-                _AUDIT_REPORT_CACHE.clear()
-                _LIT_SYNTHESIS_CACHE.clear()
-                _STRESS_OVERVIEW_CACHE.clear()
-
+        for rep in range(2):
             interp = interpret_hypothesis(q_text)
             assert interp.proposed_spec is not None
             assert interp.proposed_spec.strategy_family == exp_family
@@ -745,6 +729,8 @@ def test_donchian_short_breakout_and_oscillator_fixed_hold_exit():
     assert len(sim_d["trades"]) >= 1
     assert sim_d["trades"][0].direction == "short"
     assert sim_d["trades"][0].holding_days == 2
+    spec_donchian.parameters.entry_threshold = 20.0
+    assert simulate_strategy_core(df_short, spec_donchian, split_idx=6)["trades"] == []
 
     # 2. Mean-reversion oscillator with fixed_hold=4 must hold for 4 bars even if z-score crosses 0 earlier
     prices_osc = [100.0] * 10 + [90.0, 101.0, 101.0, 101.0, 101.0, 101.0, 101.0]
@@ -1040,7 +1026,8 @@ def test_crossed_split_trade_and_notebook_tamper_detection():
             break
     assert mutated is True
     tampered_bytes = nbformat.writes(nb).encode("utf-8")
-    with pytest.raises(Exception):
+    from nbclient.exceptions import CellExecutionError
+    with pytest.raises(CellExecutionError, match="Data slice SHA-256 mismatch"):
         execute_and_verify_notebook_bytes(tampered_bytes)
 
 
@@ -1131,3 +1118,47 @@ def test_multi_turn_chat_isolation_steered_provenance_and_borderline_cointegrati
     assert "does NOT reject the unit-root null" not in diag.cointegration_status_note
     assert "rejects a univariate unit root at the 5% level" in diag.cointegration_status_note
 
+    equilibrium = ko_pep_report.scorecard.hypothesis_comparison_breakdown[1]
+    assert diag.adf_p_value < 0.05 <= diag.engle_granger_p_value
+    assert equilibrium["verdict"] == "COINTEGRATION NOT ESTABLISHED AT 5%"
+    assert f"{diag.engle_granger_p_value:.4f}" in equilibrium["evidence"]
+
+def test_dense_random_entries_keep_each_full_holding_period():
+    from engine.stress_tests import _random_trade_starts
+
+    holds = np.array([2, 1, 3, 2])
+    starts = _random_trade_starts(holds, 13, 500, np.random.default_rng(42))
+    for row in starts:
+        order = np.argsort(row)
+        assert row.min() >= 1
+        assert np.all(row[order][1:] > (row + holds)[order][:-1])
+        assert np.max(row + holds) <= 12
+
+
+def test_random_short_matches_daily_backtest_marks():
+    from engine.stress_tests import _matched_trade_multipliers
+
+    df = _make_toy_df([100, 105, 103, 90, 104, 97, 106, 102, 99, 96])
+    spec = StrategySpec(hypothesis_text="Short after a price surge", title="Short after surge",
+                        strategy_family="single_asset", template_id="return_threshold",
+                        signal_variant="cum_return_surge", asset_a="TEST",
+                        parameters=StrategyParameters(lookback_window=1, entry_threshold=3,
+                                                      holding_period=2, direction="short"),
+                        execution=ExecutionAssumptions(execution_timing="next_close"),
+                        risk_controls=RiskControls(per_trade_stop_loss_pct=None, max_drawdown_circuit_breaker_pct=None))
+    sim = simulate_strategy_core(df, spec, 5)
+    trade = sim["trades"][0]
+    prices = df["close_a"].to_numpy()
+    ones = np.ones(len(df))
+    start = np.array([sim["dates"].index(trade.entry_date)])
+    multiplier = _matched_trade_multipliers(trade, start, prices, prices, ones, ones, False, 0.001)
+    assert (multiplier[0] - 1) * 100 == pytest.approx(trade.net_return_pct, abs=0.0001)
+
+
+def test_invalid_export_is_a_client_error():
+    from fastapi.testclient import TestClient
+    from app.server import app
+
+    with TestClient(app) as client:
+        for suffix in ("ipynb", "pdf"):
+            assert client.post(f"/api/audit/{suffix}", json={}).status_code == 422

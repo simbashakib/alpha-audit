@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local exports, downloaded archives and session output
+.DS_Store
+.env.*
+!.env.example
+/data/runs/*
+!/data/runs/audit-022cbf20a8.json
+/eval-runs/binance-cache/
+/output/
+/AV slides .pptx.pdf
+/AgentVerse 2026 Hack Schedule .pdf
+/UCL_AgentVerse_2026_Builder_Guide.pdf
+/eval-runs/practice-*/
+/data/cache/*.csv

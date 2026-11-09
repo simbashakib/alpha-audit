@@ -9,6 +9,7 @@ Step 6: Empirical Hypothesis Scorecard & Full Step-by-Step Calculation Audit Led
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -162,6 +163,15 @@ class StrategyParameters(BaseModel):
     )
 
 
+TEMPLATE_VARIANTS = {
+    "return_threshold": ("cum_return_drop", "cum_return_surge", "vol_scaled_shock"),
+    "consecutive_streak": ("negative_streak", "positive_streak"),
+    "mean_reversion_oscillator": ("price_zscore", "bollinger_band", "rsi_extremes"),
+    "trend_breakout": ("sma_crossover", "ema_crossover", "donchian_breakout"),
+    "pairs_cointegration_reversion": ("ols_log", "rolling_ols_log", "price_ratio"),
+}
+
+
 class StrategySpec(BaseModel):
     """Complete, reproducible specification of a quantitative hypothesis experiment."""
 
@@ -215,7 +225,7 @@ class StrategySpec(BaseModel):
     )
     prior_holdout_touches: int = Field(
         default=0,
-         ge=0,
+        ge=0,
         description="Number of prior parameter evaluations on this asset/date holdout slice.",
     )
 
@@ -225,6 +235,17 @@ class StrategySpec(BaseModel):
         if self.asset_b:
             self.asset_b = self.asset_b.strip().upper()
         self.benchmark_ticker = self.benchmark_ticker.strip().upper()
+        if not self.asset_a or not self.benchmark_ticker:
+            raise ValueError("The asset and benchmark must have non-empty symbols.")
+        if self.signal_variant not in TEMPLATE_VARIANTS[self.template_id]:
+            raise ValueError("The selected signal is not available for this template.")
+        if (self.strategy_family == "pairs_trading") != (self.template_id == "pairs_cointegration_reversion"):
+            raise ValueError("The strategy family must match its template.")
+        for value in (self.start_date, self.end_date):
+            if date.fromisoformat(value).isoformat() != value:
+                raise ValueError("Use ISO dates in YYYY-MM-DD format.")
+        if self.start_date > self.end_date:
+            raise ValueError("Start date must precede or equal end date.")
         if self.strategy_family == "pairs_trading":
             if not self.asset_b:
                 raise ValueError("Pairs trading requires two distinct asset tickers (asset_a and asset_b).")
@@ -535,7 +556,7 @@ class AdversarialStressTest(BaseModel):
     vulnerability_probed: str
     gemini_rationale: str
     methodology: str
-    outcome_badge: Literal["RESILIENT", "MODERATE_SENSITIVITY", "HIGH_VULNERABILITY"]
+    outcome_badge: Literal["RESILIENT", "MODERATE_SENSITIVITY", "HIGH_VULNERABILITY", "NO_EVIDENCE"]
     baseline_label: str
     baseline_value: str
     stressed_label: str

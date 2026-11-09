@@ -1,63 +1,66 @@
-# Alpha Auditor — Quantitative Hypothesis Verification Workbench
+# Alpha Auditor
 
-Alpha Auditor is a strictly causal, deterministic quantitative research workbench that translates plain-English market intuitions into audited strategy specifications, out-of-sample backtests, 5-test robustness suites, and self-contained executable Jupyter Notebooks (`.ipynb`) and PDF reports.
+Alpha Auditor is a Python research workbench built for the finance track of the UCL AgentVerse hackathon. It turns a market hypothesis into a trading rule a researcher can inspect, test on a chronological holdout, and replay in a Jupyter notebook.
 
-## Key Capabilities & Causal Invariants
+## A worked example
 
-1. **Multi-Interpretation Hypothesis Compiler (`engine/hypothesis_parser.py`)**
-   - Translates plain-English hypotheses into typed `StrategySpec` specifications.
-   - Separates **User-Specified Parameters** from **Software-Inferred Defaults** and requires explicit human researcher confirmation before any backtest can execute.
-   - Disambiguates co-movement intuitions (e.g., *"Do Pepsi and Apple move together?"*) into three distinct statistical lenses:
-     1. **Return Co-Movement** (daily Pearson correlation $\rho(r_A, r_B)$ & beta),
-     2. **Long-Run Level Equilibrium** (Engle-Granger two-step cointegration ADF $p$-value & Ornstein-Uhlenbeck half-life $t_{1/2} = -\ln(2)/\ln(1+\lambda)$), and
-     3. **Active Spread-Reversion Trading Rule P&L** (net of fees/slippage on held-out out-of-sample data).
+**Do Coca-Cola and Pepsi move together, and can you trade the divergence?** The included example uses adjusted daily prices from 2018 through 2025. It fits a log-price hedge during formation, freezes it for the holdout, and trades deviations beyond two standard deviations. Orders fill at the next open. Each entry and exit costs 10 basis points of portfolio notional.
 
-2. **Strictly Causal Signal & Execution Engine (`engine/backtester.py`)**
-   - **Zero Look-Ahead Filter**: Signals at bar $t$ depend solely on data up to $t$ ($\mathcal{F}_t$). In `ols_log` pairs mode, the log-price OLS hedge ratio $(\hat{\alpha}_t, \hat{\beta}_t)$ is estimated via an **expanding causal window $[0..t]$** inside the Formation Period ($t < t_{\text{split}}$) and **frozen at $(\hat{\alpha}_{\text{split}}, \hat{\beta}_{\text{split}})$** throughout the Held-Out Out-of-Sample Period ($t \ge t_{\text{split}}$).
-   - **Unit Gross Exposure & Signed Hedge Weights**: Two-asset positions size legs with $w_A = \pm\frac{1}{1+|\hat{\beta}|}$ and $w_B = \mp\frac{\hat{\beta}}{1+|\hat{\beta}|}$ so $|w_A| + |w_B| = 1.0$ while preserving the sign of $\hat{\beta}$.
-   - **Exact Compounded Trade & Daily Accounting**: Per-trade net return matches the compounded ratio of net equity across the trade lifecycle, including end-of-sample open-position liquidation on the final bar:
-     $$C_0 \prod_{k=1}^{K} \left(1 + \frac{R_{\text{net},k}}{100}\right) = E_{\text{net},T-1}$$
-   - **Running Peak Anchored at Initial Capital**: Running peak equity is $P_t = \max\left(C_0, \max_{0 \le s \le t} E_s\right)$ so immediate post-entry losses are never understated in Maximum Drawdown.
-   - **Zero-Exposure & Halted Holdout Transparency**: If a circuit breaker halts trading during Formation before $t_{\text{split}}$, Out-of-Sample metrics explicitly set `is_zero_exposure = True` and `halted_prior_to_period = True`, and Out-of-Sample Scorecard dimensions report `NO_EVIDENCE` rather than penalizing or rewarding zero exposure.
+| Question | Result on the included data |
+| --- | --- |
+| Do the daily returns move together? | Formation log-return correlation was 0.739. |
+| Is there evidence of a long-run price relationship? | The Engle–Granger p-value was 0.101. The formation data did not establish cointegration at the 5% level. |
+| Did the trading rule make money in the holdout? | It lost 23.59% net of modelled costs across 30 trades entered in the holdout, which began on 30 December 2021. |
 
-3. **5-Test Robustness Suite (`engine/stress_tests.py`)**
-   - **Test 1** removes the largest winning trades to measure dependence on outliers.
-   - **Test 2** delays fills by one more bar and stresses transaction costs.
-   - **Test 3** compares results across volatility and market regimes.
-   - **Test 4** compares the signal with 500 simulated random-entry trade sequences when sufficient data and trades are available.
-   - **Test 5** checks structural stability for pairs or parameter sensitivity for a single-asset rule.
+The example shows why the app reports correlation, cointegration and trading performance separately. The parameters and dates are in the [example specification](examples/ko_pep.json).
 
-4. **Executable v4 Jupyter Notebook (`.ipynb`) & PDF Exports (`engine/notebook_ipynb.py`, `engine/notebook_pdf.py`)**
-   - Exports a notebook with embedded aligned market data. Run it in a fresh Python kernel with the project dependencies to recompute the audit and check the results against the saved report.
+## Run it locally
 
-## Quickstart
+Use Python 3.12 or newer. From the repository root, create a virtual environment and install the dependencies.
 
-### 1. Install Dependencies
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-### 2. Run the Web Workbench
-
-Step 1 sends the user's hypothesis and earlier user inputs to Gemini for classification. Gemini selects one of the five built-in baskets, requests more detail, or returns no match. Alpha Auditor's local compiler fills the selected template. The user reviews the rule and confirms before running it. Backtests, literature notes, stress tests and reports run locally.
-
-Set `GEMINI_API_KEY` in the server environment or the project's Git-ignored `.env` file. Set `ALPHA_AUDITOR_GEMINI_MODEL` to select an accessible model (default `gemini-3.5-flash`).
+**Run the example without an API key.** The repository includes the market data for this replay. The first command prints formation and holdout results and exports the report. The second computes the same SPY experiment twice and compares the complete reports, excluding the creation timestamp.
 
 ```bash
-uvicorn app.server:app --reload --port 8000
-```
-Open `http://127.0.0.1:8000` in your browser.
-
-### 3. Deterministic CLI Replay & Verification
-```bash
-# Verify deterministic two-pass repeatability
+python replay.py examples/ko_pep.json --pdf output/ko_pep.pdf --ipynb output/ko_pep.ipynb
 python replay.py --verify-repeatability
-
-# Replay a saved audit artifact and verify fresh-kernel .ipynb execution
-python replay.py data/runs/audit-022cbf20a8.json --ipynb /tmp/audit.ipynb --execute-ipynb
 ```
 
-### 4. Run Test Suite
+To execute all notebook cells in a fresh Jupyter kernel and save their output, add `--execute-ipynb` to the first command. To run an exported notebook manually, open it inside this checkout with a kernel that has the project dependencies. It includes the aligned market data and imports the Python engine to recompute the results.
+
+**Run the web app.** Set `GEMINI_API_KEY` in your server environment or a local `.env` file. You can set `ALPHA_AUDITOR_GEMINI_MODEL` to a model available to your account. Start the server and open [the workbench](http://127.0.0.1:8000).
+
 ```bash
-pytest -q
+python -m uvicorn app.server:app --port 8000
 ```
+
+Gemini receives the hypothesis and preceding user turns. It selects one of five supported strategy templates, requests clarification, or returns no match. The local compiler builds the rule, and the researcher confirms the assets, parameters and costs before running it. Python performs the statistical tests, backtest and report calculations. The browser loads Plotly from a CDN. Uncached tickers require a Yahoo Finance connection.
+
+## Research design
+
+- Signals use observed bars and execute at the next configured open or close. Pairs trades use signed, unit-gross weights. Daily P&L and trade records include modelled commission and slippage.
+- The report separates formation and holdout performance. It records the specification, dataset hash, computational environment and random seeds. A run with no holdout exposure is labelled explicitly.
+- Five stress tests examine dependence on winning trades, execution delays and costs, market regimes, random entry timing, and hedge or parameter stability. The random-entry comparison uses 500 seeded schedules matched to the observed trade durations, directions and leg weights.
+- Daily-bar execution approximates real fills. The simulation omits market impact and borrow fees and uses 252 observations per year for annualisation. Exploring new parameters on a previously inspected holdout makes that analysis exploratory. The scorecard summarises historical evidence.
+
+## Code and tests
+
+| Path | Role |
+| --- | --- |
+| `engine/` | Specification schemas, signal generation, backtesting, econometrics, stress tests and exports |
+| `app/server.py` and `frontend/` | FastAPI endpoints and browser workbench |
+| `data/cache/` | Bundled adjusted daily bars. The snapshot manifest records each file's SHA-256 hash. |
+| `adapter.py` | JSONL interface for the hackathon evaluation harness |
+| `agentverse/` | Organiser-provided starter kit, fixtures and evaluation harness |
+| `eval-runs/challenge*/` | Archived self-serve challenge results from the original hackathon submission |
+
+```bash
+python -m pytest -q
+```
+
+The project tests exercise next-bar fills, transaction costs, prefix invariance, split handling, simulated Gemini responses, API endpoints and notebook reconciliation. The archived challenge results describe the original submission. The automated workflow runs the project tests and replay check on subsequent pushes and pull requests.

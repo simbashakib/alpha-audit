@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import io
 import textwrap
-from typing import Any
 
 import matplotlib
 matplotlib.use("Agg")
@@ -435,10 +434,11 @@ def render_jupyter_notebook_pdf(report: AuditReport) -> bytes:
         )
 
         # Out [4a]: Stress Test Suite Table
+        missing = sum(t.outcome_badge == "NO_EVIDENCE" for t in report.stress_test_suite.tests)
         st_lines = [
             f"Stress Summary: {report.stress_test_suite.resilient_count}/5 Resilient  |  "
-            f"{5 - report.stress_test_suite.resilient_count - report.stress_test_suite.vulnerability_count}/5 Moderate  |  "
-            f"{report.stress_test_suite.vulnerability_count}/5 High Vulnerability",
+            f"{5 - report.stress_test_suite.resilient_count - report.stress_test_suite.vulnerability_count - missing}/5 Moderate  |  "
+            f"{report.stress_test_suite.vulnerability_count}/5 High Vulnerability  |  {missing}/5 No Evidence",
             "-" * 88,
         ]
         for idx, t in enumerate(report.stress_test_suite.tests, start=1):
