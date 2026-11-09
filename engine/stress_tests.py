@@ -1,4 +1,4 @@
-"""Step 5 & Step 6 — Gemini Adversarial Stress Testing & Empirical Hypothesis Scorecard.
+"""Step 5 & Step 6 — Adversarial Stress Testing & Empirical Hypothesis Scorecard.
 
 Step 5: Designs and executes 5 rigorous adversarial stress tests tailored to the user's
 hypothesis, asset data, and strategy mechanics to uncover hidden vulnerabilities.
@@ -10,7 +10,6 @@ exact numbers from the current run plugged into each equation.
 from __future__ import annotations
 
 import math
-import os
 from typing import Any, Callable
 
 import numpy as np
@@ -42,7 +41,6 @@ def _test_1_outlier_removal(
 ) -> AdversarialStressTest:
     """Test 1: Right-Tail Outlier Trade Removal (Top 1, Top 3, Top 5 best trades)."""
     n_trades = len(trades)
-    base_cum_pct = full_metrics.total_net_return_pct
 
     if n_trades == 0:
         return AdversarialStressTest(
@@ -54,7 +52,7 @@ def _test_1_outlier_removal(
                 "all historical signals or concentrated in a handful of extreme market dislocations."
             ),
             methodology="Sorts all executed trades by net return and recomputes compounded equity after removing the top 1, 3, and 5 winners.",
-            outcome_badge="HIGH_VULNERABILITY",
+            outcome_badge="NO_EVIDENCE",
             baseline_label="All Trades Net Return",
             baseline_value="0.00% (0 trades)",
             stressed_label="Excl. Top 3 Trades",
@@ -64,10 +62,11 @@ def _test_1_outlier_removal(
             chart_payload={"labels": ["All Trades"], "values": [0.0]},
         )
 
-    sorted_Desc = sorted(trades, key=lambda t: t.net_return_pct, reverse=True)
+    sorted_trades = sorted(trades, key=lambda t: t.net_return_pct, reverse=True)
+    winner_count = sum(t.net_return_pct > 0 for t in sorted_trades)
 
     def _compounded_return_excluding(k: int) -> tuple[float, float, int]:
-        remaining = sorted_Desc[k:] if k < len(sorted_Desc) else []
+        remaining = sorted_trades[min(k, winner_count):]
         if not remaining:
             return 0.0, 0.0, 0
         rets = np.array([t.net_return_pct / 100.0 for t in remaining], dtype=float)
@@ -80,7 +79,6 @@ def _test_1_outlier_removal(
     comp_3, mean_3, cnt_3 = _compounded_return_excluding(3)
     comp_5, mean_5, cnt_5 = _compounded_return_excluding(5)
 
-    top_1_trade = sorted_Desc[0]
     if comp_0 > 0 and comp_3 > 0 and comp_3 >= 0.5 * comp_0:
         badge = "RESILIENT"
     elif comp_0 > 0 and comp_1 > 0:
@@ -96,7 +94,7 @@ def _test_1_outlier_removal(
             "mean_trade_net_pct": round(mean_0, 3),
         },
         {
-            "scenario": f"Excl. Top 1 Trade ({top_1_trade.entry_date}: +{top_1_trade.net_return_pct:.2f}%)",
+            "scenario": "Excl. Top Winning Trade",
             "trades_included": cnt_1,
             "compounded_net_return_pct": round(comp_1, 2),
             "mean_trade_net_pct": round(mean_1, 3),
@@ -116,10 +114,8 @@ def _test_1_outlier_removal(
     ]
 
     finding = (
-        f"Across {n_trades} historical trades, the single largest winning trade occurred on "
-        f"{top_1_trade.entry_date} ({top_1_trade.net_return_pct:+.2f}% net). Removing the top 1 trade shifts "
-        f"compounded trade return from {comp_0:+.2f}% to {comp_1:+.2f}%; removing the top 3 winning trades "
-        f"results in {comp_3:+.2f}% (mean trade return {mean_3:+.3f}%)."
+        f"Among {n_trades} completed trades, {winner_count} earned a positive net return. "
+        f"Removing up to three winners changes compounded net return from {comp_0:+.2f}% to {comp_3:+.2f}%."
     )
 
     return AdversarialStressTest(
@@ -182,7 +178,9 @@ def _test_2_execution_latency_and_cost_shock(
     ret_t2, sr_t2 = _stats(sim_t2_1x)
     ret_t2_2x, sr_t2_2x = _stats(sim_t2_2x)
 
-    if ret_2x > 0 and ret_t2 > 0 and sr_t2 >= 0.5 * max(base_sr, 0.1):
+    if full_metrics.trade_count == 0:
+        badge = "NO_EVIDENCE"
+    elif ret_2x > 0 and ret_t2 > 0 and sr_t2 >= 0.5 * max(base_sr, 0.1):
         badge = "RESILIENT"
     elif ret_2x > 0 or ret_t2 > 0:
         badge = "MODERATE_SENSITIVITY"
@@ -239,7 +237,7 @@ def _test_2_execution_latency_and_cost_shock(
         outcome_badge=badge,
         baseline_label=f"Baseline (t+1, {base_cost:.0f} bps)",
         baseline_value=f"{base_ret:+.2f}% (SR {base_sr:.2f})",
-        stressed_label=f"t+2 Delay + 2× Cost",
+        stressed_label="t+2 Delay + 2× Cost",
         stressed_value=f"{ret_t2_2x:+.2f}% (SR {sr_t2_2x:.2f})",
         key_finding=finding,
         breakdown_rows=rows,
@@ -273,15 +271,13 @@ def _test_3_regime_vulnerability(
         pd.Series(bench_ret)
         .rolling(21, min_periods=10)
         .std()
-        .bfill()
-        .fillna(0.01)
         .to_numpy(dtype=float)
         * math.sqrt(252.0)
         * 100.0
     )
-    sma_200 = pd.Series(bench_close).rolling(200, min_periods=30).mean().bfill().to_numpy(dtype=float)
+    sma_200 = pd.Series(bench_close).rolling(200, min_periods=30).mean().to_numpy(dtype=float)
 
-    q33, q67 = np.percentile(vol_21, [33.3, 66.7])
+    q33, q67 = np.nanpercentile(vol_21, [33.3, 66.7])
 
     regimes = [
         ("Low Volatility Tercile", vol_21 <= q33),
@@ -306,7 +302,7 @@ def _test_3_regime_vulnerability(
         cum_b = float((np.prod(1.0 + sub_b) - 1.0) * 100.0)
         sd = float(np.std(sub_r, ddof=1)) if n_days > 2 else 0.0
         sr = float((np.mean(sub_r) / sd) * math.sqrt(252.0)) if sd > 1e-12 else 0.0
-        active_days = int(np.sum(np.abs(sub_r) > 1e-9))
+        active_days = int(np.sum(np.abs(base_sim["daily_position"][mask]) > 0))
         if cum_r > 0:
             positive_regimes += 1
         rows.append(
@@ -322,7 +318,9 @@ def _test_3_regime_vulnerability(
         labels.append(label.replace(" (Bench > 200d SMA)", "").replace(" (Bench < 200d SMA)", ""))
         sharpes.append(round(sr, 3))
 
-    if positive_regimes >= 4:
+    if not base_sim["trades"]:
+        badge = "NO_EVIDENCE"
+    elif positive_regimes >= 4:
         badge = "RESILIENT"
     elif positive_regimes >= 2:
         badge = "MODERATE_SENSITIVITY"
@@ -369,6 +367,41 @@ def _test_3_regime_vulnerability(
     )
 
 
+def _random_trade_starts(holding_days, n_bars, replications, rng):
+    """Sample distinct fill bars for each trade, including high-occupancy schedules."""
+    n_trades = len(holding_days)
+    # First entry is at least bar 1. Reserve one bar between an exit and the
+    # next entry. Sorted distinct slots encode every feasible gap allocation.
+    slots = n_bars - 1 - int(holding_days.sum())
+    if slots < n_trades:
+        raise ValueError("Trade durations cannot fit in the available market bars.")
+    starts = np.empty((replications, n_trades), dtype=int)
+    for row in starts:
+        order = rng.permutation(n_trades)
+        gaps = np.sort(rng.choice(slots, n_trades, replace=False))
+        prior_duration = np.cumsum(holding_days[order]) - holding_days[order]
+        row[order] = 1 + gaps + prior_duration
+    return starts
+
+
+def _matched_trade_multipliers(trade, starts, open_a, close_a, open_b, close_b, next_open, one_way_cost):
+    """Apply the simulator's constant leg weights and compound each mark-to-market interval."""
+    wa, wb = trade.leg_weight_a, trade.leg_weight_b
+    def growth(pa, pb, qa, qb):
+        return 1 + wa * (qa / pa - 1) + wb * (qb / pb - 1)
+
+    gross = np.ones(len(starts))
+    if next_open:
+        gross *= growth(open_a[starts], open_b[starts], close_a[starts], close_b[starts])
+    for offset in range(1, trade.holding_days + 1):
+        bars = starts + offset
+        exit_at_open = (next_open and offset == trade.holding_days
+                        and trade.exit_reason != "end_of_sample_liquidation")
+        price_a, price_b = (open_a, open_b) if exit_at_open else (close_a, close_b)
+        gross *= growth(close_a[bars - 1], close_b[bars - 1], price_a[bars], price_b[bars])
+    return np.maximum(0.01, gross - 2 * one_way_cost)
+
+
 def _test_4_monte_carlo_random_entry(
     df: pd.DataFrame,
     base_sim: dict[str, Any],
@@ -393,11 +426,11 @@ def _test_4_monte_carlo_random_entry(
             vulnerability_probed="Whether signal entry timing adds statistical edge beyond passive market drift.",
             gemini_rationale="Compares actual signal entry dates against 500 random-entry strategies with identical exposure.",
             methodology="Simulates 500 random non-overlapping trade sequences with matched trade count, holding durations, and directions.",
-            outcome_badge="HIGH_VULNERABILITY",
+            outcome_badge="NO_EVIDENCE",
             baseline_label="Actual Strategy Return",
             baseline_value="0.00%",
             stressed_label="Random-Entry Median",
-            stressed_value="0.00%",
+            stressed_value="Unavailable",
             key_finding="Insufficient trades to run Monte Carlo random-entry comparison.",
             breakdown_rows=[],
             chart_payload={"type": "bar", "labels": [], "values": []},
@@ -409,70 +442,15 @@ def _test_4_monte_carlo_random_entry(
     exec_next_open = spec.execution.execution_timing == "next_open"
     one_way_cost = (spec.execution.commission_bps + spec.execution.slippage_bps) / 10_000.0
 
-    # Extract exact multiset of (holding_days, direction, leg_weight_a, leg_weight_b)
-    trade_specs: list[tuple[int, str, float, float]] = []
-    for t in trades:
-        h = max(1, min(n_bars - 3, int(t.holding_days)))
-        wa = float(getattr(t, "leg_weight_a", 1.0 if t.direction == "long" else -1.0))
-        wb = float(getattr(t, "leg_weight_b", 0.0))
-        if is_pairs and abs(wa) + abs(wb) < 1e-6:
-            wa, wb = (0.5, -0.5) if t.direction == "long_spread" else (-0.5, 0.5)
-        trade_specs.append((h, t.direction, wa, wb))
-
-    avg_hold = max(1, int(round(np.mean([ts[0] for ts in trade_specs]))))
-    sum_hold = sum(ts[0] for ts in trade_specs)
-    usable_span = max(1, n_bars - 2)
-    free_bars = usable_span - sum_hold
-
-    def _eval_matched_trade(entry_idx: int, hold_d: int, direction: str, wa: float, wb: float) -> float:
-        exit_idx = min(n_bars - 1, entry_idx + hold_d)
-        if exit_idx <= entry_idx:
-            exit_idx = min(n_bars - 1, entry_idx + 1)
-        pa_in = open_a[entry_idx] if exec_next_open else close_a[entry_idx]
-        pa_out = open_a[exit_idx] if (exec_next_open and exit_idx < n_bars - 1) else close_a[exit_idx]
-        if is_pairs:
-            pb_in = open_b[entry_idx] if exec_next_open else close_b[entry_idx]
-            pb_out = open_b[exit_idx] if (exec_next_open and exit_idx < n_bars - 1) else close_b[exit_idx]
-            ra = (pa_out / pa_in) - 1.0
-            rb = (pb_out / pb_in) - 1.0
-            gross_r = wa * ra + wb * rb
-        else:
-            r = (pa_out / pa_in) - 1.0
-            gross_r = r if direction == "long" else -r
-        # Round-trip entry + exit fee deduction matching simulate_strategy_core
-        net_mult = (1.0 + gross_r) - 2.0 * one_way_cost
-        return max(0.05, net_mult)
-
-    rng = np.random.default_rng(seed)
-    mc_returns = np.zeros(replications, dtype=float)
-    perm_indices = np.arange(n_trades)
-
-    for m in range(replications):
-        rng.shuffle(perm_indices)
-        if free_bars >= n_trades:
-            # Exact stars-and-bars bijection for uniform non-overlapping intervals
-            chosen_slots = np.sort(rng.choice(free_bars + n_trades, size=n_trades, replace=False))
-            eq = 1.0
-            cum_h = 0
-            for j, slot in enumerate(chosen_slots):
-                h_j, dir_j, wa_j, wb_j = trade_specs[perm_indices[j]]
-                start_idx = 1 + int(slot - j) + cum_h
-                start_idx = max(1, min(n_bars - 2, start_idx))
-                eq *= _eval_matched_trade(start_idx, h_j, dir_j, wa_j, wb_j)
-                cum_h += h_j
-            mc_returns[m] = (eq - 1.0) * 100.0
-        else:
-            # High-occupancy fallback: sequential non-overlapping placement with random wrap offset
-            offset = int(rng.integers(1, max(2, n_bars - 2)))
-            eq = 1.0
-            cursor = offset
-            for idx_p in perm_indices:
-                h_j, dir_j, wa_j, wb_j = trade_specs[idx_p]
-                if cursor + h_j >= n_bars - 1:
-                    cursor = int(rng.integers(1, max(2, min(10, n_bars - h_j - 1))))
-                eq *= _eval_matched_trade(cursor, h_j, dir_j, wa_j, wb_j)
-                cursor += h_j + 1
-            mc_returns[m] = (eq - 1.0) * 100.0
+    holding_days = np.array([trade.holding_days for trade in trades], dtype=int)
+    avg_hold = int(round(holding_days.mean()))
+    starts = _random_trade_starts(holding_days, n_bars, replications, np.random.default_rng(seed))
+    equity = np.ones(replications)
+    for column, trade in enumerate(trades):
+        equity *= _matched_trade_multipliers(
+            trade, starts[:, column], open_a, close_a, open_b, close_b, exec_next_open, one_way_cost
+        )
+    mc_returns = (equity - 1.0) * 100.0
 
     mc_median = float(np.median(mc_returns))
     mc_mean = float(np.mean(mc_returns))
@@ -567,27 +545,30 @@ def _test_5_structural_or_parameter_stability(
     """Test 5: Pairs Cointegration Structural Break OR Single-Asset Parameter Cliff-Edge Test."""
     if spec.strategy_family == "pairs_trading" and "close_b" in df.columns and pairs_diag is not None:
         # Compare Formation (In-Sample) vs Out-of-Sample OLS Hedge Ratio & ADF stationarity
-        log_a_is = np.log(df["close_a"].iloc[:split_idx].to_numpy(dtype=float))
-        log_b_is = np.log(df["close_b"].iloc[:split_idx].to_numpy(dtype=float))
         log_a_oos = np.log(df["close_a"].iloc[split_idx:].to_numpy(dtype=float))
         log_b_oos = np.log(df["close_b"].iloc[split_idx:].to_numpy(dtype=float))
 
         beta_is = pairs_diag.ols_hedge_ratio_beta
         alpha_is = pairs_diag.ols_alpha
 
-        if len(log_a_oos) > 25:
-            x_oos = sm.add_constant(log_b_oos)
-            res_oos = sm.OLS(log_a_oos, x_oos).fit()
-            beta_oos = float(res_oos.params[1]) if len(res_oos.params) > 1 else beta_is
+        try:
+            if np.ptp(log_b_oos) == 0:
+                raise ValueError("Constant holdout regressor")
+            beta_oos = float(sm.OLS(log_a_oos, sm.add_constant(log_b_oos)).fit().params[1])
             spread_oos = log_a_oos - (alpha_is + beta_is * log_b_oos)
-            try:
-                adf_oos_res = adfuller(spread_oos, autolag="AIC")
-                adf_oos_p = float(adf_oos_res[1])
-            except Exception:
-                adf_oos_p = 0.5
-        else:
-            beta_oos = beta_is
-            adf_oos_p = pairs_diag.adf_p_value
+            adf_oos_p = float(adfuller(spread_oos, autolag="AIC")[1])
+            if not np.isfinite(adf_oos_p):
+                raise ValueError("Undefined holdout ADF")
+        except (ValueError, np.linalg.LinAlgError):
+            return AdversarialStressTest(
+                test_id="pairs_structural_break", title="Holdout hedge ratio and spread stationarity",
+                vulnerability_probed="Instability of the formation hedge in the holdout.",
+                gemini_rationale="Tests the formation relationship on held-out prices.",
+                methodology="Refit the hedge and test the frozen formation residual on the holdout.",
+                outcome_badge="NO_EVIDENCE", baseline_label="Formation hedge ratio",
+                baseline_value=f"{beta_is:.4f}", stressed_label="Holdout test", stressed_value="Unavailable",
+                key_finding="The holdout data did not yield an estimable hedge and residual ADF statistic.",
+            )
 
         beta_drift_pct = abs(beta_oos - beta_is) / max(abs(beta_is), 1e-6) * 100.0
 
@@ -608,11 +589,6 @@ def _test_5_structural_or_parameter_stability(
                 "metric": "Spread ADF Stationarity p-value",
                 "in_sample_formation": f"{pairs_diag.adf_p_value:.4f}",
                 "out_of_sample_validation": f"{adf_oos_p:.4f}",
-            },
-            {
-                "metric": "Ornstein-Uhlenbeck Half-Life",
-                "in_sample_formation": f"{pairs_diag.half_life_days or 'N/A'} days",
-                "out_of_sample_validation": f"Hurst H = {pairs_diag.hurst_exponent:.3f}",
             },
         ]
 
@@ -659,12 +635,12 @@ def _test_5_structural_or_parameter_stability(
             vulnerability_probed="Overfitting to a narrow parameter island (Bailey & López de Prado, 2014).",
             gemini_rationale="Tests whether small perturbations to threshold or holding period cause performance collapse.",
             methodology="Evaluates Sharpe ratio dispersion across the 5×5 parameter neighborhood grid.",
-            outcome_badge="MODERATE_SENSITIVITY",
+            outcome_badge="NO_EVIDENCE",
             baseline_label="Selected Spec Sharpe",
             baseline_value=f"{full_metrics.sharpe_ratio:.2f}",
             stressed_label="Grid Median Sharpe",
-            stressed_value=f"{full_metrics.sharpe_ratio:.2f}",
-            key_finding="Parameter sensitivity surface evaluated.",
+            stressed_value="Unavailable",
+            key_finding="No parameter sensitivity grid was computed.",
             breakdown_rows=[],
             chart_payload={"type": "bar", "labels": [], "values": []},
         )
@@ -745,7 +721,6 @@ def _test_5_structural_or_parameter_stability(
     )
 
 
-_STRESS_OVERVIEW_CACHE: dict[str, str] = {}
 
 
 def run_adversarial_stress_suite(
@@ -772,6 +747,7 @@ def run_adversarial_stress_suite(
     vuln_count = sum(1 for t in tests if t.outcome_badge == "HIGH_VULNERABILITY")
     resilient_count = sum(1 for t in tests if t.outcome_badge == "RESILIENT")
 
+    missing_count = sum(t.outcome_badge == "NO_EVIDENCE" for t in tests)
     overview = (
         f"Alpha Auditor ran 5 adversarial stress tests for '{spec.title}' ({spec.template_id} / "
         f"{spec.signal_variant}) on {spec.asset_a}"
@@ -780,14 +756,9 @@ def run_adversarial_stress_suite(
         f"(3) Realized Volatility & Bull/Bear Macro Regime Decomposition, (4) 500-Run Monte Carlo Random-Entry "
         f"Null Benchmark, and (5) {'Out-of-Sample Cointegration Structural Break' if spec.strategy_family == 'pairs_trading' else '25-Cell Parameter Cliff-Edge Perturbation'}. "
         f"Across the 5 stress tests, {resilient_count} showed high resilience, "
-        f"{5 - resilient_count - vuln_count} showed moderate sensitivity, and {vuln_count} flagged high vulnerability."
+        f"{5 - resilient_count - vuln_count - missing_count} showed moderate sensitivity, and {vuln_count} flagged high vulnerability. "
+        f"{missing_count} had insufficient evidence."
     )
-
-    cache_key = f"{spec.model_dump_json()}:{overview}"
-    if cache_key in _STRESS_OVERVIEW_CACHE:
-        overview = _STRESS_OVERVIEW_CACHE[cache_key]
-    else:
-        _STRESS_OVERVIEW_CACHE[cache_key] = overview
 
     return StressTestSuite(
         gemini_overview=sanitize_research_notes([overview])[0],
@@ -893,7 +864,10 @@ def build_hypothesis_scorecard_and_ledger(
     # Dimension 3: Out-of-Sample Persistence
     if oos_metrics.trade_count == 0 or oos_metrics.is_zero_exposure:
         d3_status = "NO_EVIDENCE"
-        if oos_metrics.halted_prior_to_period:
+        if oos_metrics.trade_count == 0 and not oos_metrics.is_zero_exposure:
+            d3_metric = f"Held-out net return: {oos_metrics.total_net_return_pct:+.2f}%; 0 new trades"
+            d3_expl = "A formation trade contributed holdout P&L. No new holdout entries tested signal persistence."
+        elif oos_metrics.halted_prior_to_period:
             halt_dt = in_metrics.circuit_breaker_date or oos_metrics.circuit_breaker_date or full_metrics.circuit_breaker_date
             d3_metric = (
                 f"In-Sample SR: {in_metrics.sharpe_ratio:.2f} ({in_metrics.total_net_return_pct:+.1f}%, N={in_metrics.trade_count}) → "
@@ -972,7 +946,8 @@ def build_hypothesis_scorecard_and_ledger(
     )
 
     # Dimension 5: Adversarial Stress-Test Resilience
-    if full_metrics.trade_count == 0:
+    missing = sum(t.outcome_badge == "NO_EVIDENCE" for t in stress_suite.tests)
+    if full_metrics.trade_count == 0 or missing == len(stress_suite.tests):
         d5_status = "NO_EVIDENCE"
     elif stress_suite.resilient_count >= 3 and stress_suite.vulnerability_count == 0:
         d5_status = "SUPPORTED"
@@ -988,8 +963,8 @@ def build_hypothesis_scorecard_and_ledger(
         status=d5_status,
         evidence_metric=(
             f"{stress_suite.resilient_count}/5 Resilient | "
-            f"{5 - stress_suite.resilient_count - stress_suite.vulnerability_count}/5 Moderate | "
-            f"{stress_suite.vulnerability_count}/5 High Vulnerability"
+            f"{5 - stress_suite.resilient_count - stress_suite.vulnerability_count - missing}/5 Moderate | "
+            f"{stress_suite.vulnerability_count}/5 High Vulnerability | {missing}/5 No Evidence"
         ),
         explanation=(
             f"Out of 5 adversarial stress tests in Step 5, the hypothesis scored Resilient on "
@@ -1024,25 +999,27 @@ def build_hypothesis_scorecard_and_ledger(
         e1 = f"Daily Return r = {pairs_diag.return_correlation:+.3f} | Log-Price R² = {pairs_diag.ols_r_squared:.3f} (β = {pairs_diag.ols_hedge_ratio_beta:.3f})"
         x1 = (
             f"{spec.asset_a} and {spec.asset_b} daily returns exhibit r = {pairs_diag.return_correlation:+.3f} correlation. "
-            "Positive daily co-movement means returns often share the same sign, but does not guarantee a stationary price spread."
+            "This measures linear association between daily returns. The long-run equilibrium test uses log-price levels."
         )
 
-        v2 = "COINTEGRATED (p < 0.05)" if pairs_diag.adf_p_value < 0.05 else "NON-STATIONARY / DRIFTING SPREAD"
-        s2 = "SUPPORTED" if pairs_diag.adf_p_value < 0.05 else ("MIXED" if pairs_diag.adf_p_value < 0.15 else "CONTRADICTED")
+        eg_p = pairs_diag.engle_granger_p_value
+        v2 = "COINTEGRATION SUPPORTED AT 5%" if eg_p < 0.05 else "COINTEGRATION NOT ESTABLISHED AT 5%"
+        s2 = "SUPPORTED" if eg_p < 0.05 else "MIXED"
         e2 = (
-            f"ADF Stat = {pairs_diag.adf_statistic:.3f} (p = {pairs_diag.adf_p_value:.4f}) | "
+            f"Engle-Granger p = {eg_p:.4f} | Residual ADF p = {pairs_diag.adf_p_value:.4f} | "
             f"Half-Life = {pairs_diag.half_life_days if pairs_diag.half_life_days is not None else 'N/A'}d | Hurst H = {pairs_diag.hurst_exponent:.3f}"
         )
         x2 = pairs_diag.cointegration_status_note
 
         v3 = (
             f"HALTED IN FORMATION ({in_metrics.circuit_breaker_date or full_metrics.circuit_breaker_date})"
-            if oos_metrics.halted_prior_to_period
-            else ("POSITIVE NET RETURN" if full_metrics.total_net_return_pct > 0 else "NEGATIVE NET RETURN")
+            if oos_metrics.halted_prior_to_period and oos_metrics.is_zero_exposure
+            else ("NO HOLDOUT EXPOSURE" if oos_metrics.is_zero_exposure else
+                  ("POSITIVE HOLDOUT RETURN" if oos_metrics.total_net_return_pct > 0 else "NON-POSITIVE HOLDOUT RETURN"))
         )
         s3 = (
             "NO_EVIDENCE"
-            if oos_metrics.halted_prior_to_period
+            if oos_metrics.is_zero_exposure
             else ("SUPPORTED" if (full_metrics.total_net_return_pct > 0 and oos_metrics.total_net_return_pct > 0) else ("MIXED" if full_metrics.total_net_return_pct > 0 else "CONTRADICTED"))
         )
         e3 = (
@@ -1110,7 +1087,7 @@ def build_hypothesis_scorecard_and_ledger(
         )
         s3 = (
             "NO_EVIDENCE"
-            if oos_metrics.halted_prior_to_period
+            if oos_metrics.is_zero_exposure
             else ("SUPPORTED" if full_metrics.excess_return_pct > 0 else ("MIXED" if full_metrics.total_net_return_pct > 0 else "CONTRADICTED"))
         )
         e3 = (
@@ -1174,8 +1151,7 @@ def build_hypothesis_scorecard_and_ledger(
     if spec.strategy_family == "pairs_trading" and pairs_diag is not None:
         pairs_clause = (
             f" Econometrically, {spec.asset_a} and {spec.asset_b} exhibit daily return correlation r = {pairs_diag.return_correlation:+.3f}, "
-            f"while the log-price spread ADF stationarity test yields p = {pairs_diag.adf_p_value:.4f} "
-            f"({'stationary cointegrated spread' if pairs_diag.adf_p_value < 0.05 else 'non-stationary drifting spread'})."
+            f"and the formation Engle-Granger test gives p = {pairs_diag.engle_granger_p_value:.4f}."
         )
 
     checks_clause = (
@@ -1200,7 +1176,7 @@ def build_hypothesis_scorecard_and_ledger(
         f"In-Sample vs. Out-of-Sample: Formation Sharpe was {in_metrics.sharpe_ratio:.2f} ({in_metrics.total_net_return_pct:+.2f}% across {in_metrics.trade_count} trades); "
         + (
             f"Out-of-Sample had 0 trades (NO_EVIDENCE) because the drawdown circuit breaker halted trading on {in_metrics.circuit_breaker_date or full_metrics.circuit_breaker_date}."
-            if oos_metrics.halted_prior_to_period
+            if oos_metrics.halted_prior_to_period and oos_metrics.is_zero_exposure
             else (
                 "Out-of-Sample had 0 trades (NO_EVIDENCE; Sharpe undefined)."
                 if oos_metrics.is_zero_exposure

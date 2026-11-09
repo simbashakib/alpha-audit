@@ -1,0 +1,60 @@
+{
+  "hypothesis_text": "I think Coca-Cola and Pepsi prices tend to converge after diverging by more than 2 standard deviations.",
+  "title": "KO / PEP Statistical Arbitrage Spread Convergence",
+  "strategy_family": "pairs_trading",
+  "template_id": "pairs_cointegration_reversion",
+  "signal_variant": "ols_log",
+  "asset_a": "KO",
+  "asset_b": "PEP",
+  "benchmark_ticker": "SPY",
+  "start_date": "2018-01-01",
+  "end_date": "2025-12-31",
+  "threshold_mode": "user_specified",
+  "parameters": {
+    "lookback_window": 20,
+    "secondary_window": 60,
+    "streak_length": 3,
+    "entry_threshold": 2.0,
+    "exit_threshold": 0.25,
+    "stop_z_threshold": 4.0,
+    "holding_period": 20,
+    "exit_mode": "threshold_reversion",
+    "direction": "both"
+  },
+  "execution": {
+    "initial_capital": 100000.0,
+    "execution_timing": "next_open",
+    "commission_bps": 5.0,
+    "slippage_bps": 5.0,
+    "train_split_ratio": 0.5
+  },
+  "risk_controls": {
+    "max_drawdown_circuit_breaker_pct": 25.0,
+    "per_trade_stop_loss_pct": 12.0,
+    "max_holding_days": 30
+  },
+  "selected_diagnostics": [
+    "pairs_cointegration",
+    "stationary_bootstrap",
+    "newey_west_alpha",
+    "cost_sensitivity",
+    "subperiod_regimes",
+    "parameter_sensitivity_grid"
+  ],
+  "human_confirmed": true,
+  "user_specified_fields": [
+    "asset_a",
+    "asset_b",
+    "parameters.entry_threshold"
+  ],
+  "software_inferred_defaults": {
+    "parameters.lookback_window": "20d",
+    "parameters.holding_period": "20d max",
+    "parameters.exit_threshold": "±0.25σ",
+    "execution.execution_timing": "next_open (t+1)",
+    "execution.cost_bps": "10 bps (5 comm + 5 slip)",
+    "risk_controls.max_drawdown_circuit_breaker_pct": "25.0%"
+  },
+  "evaluation_stage": "confirmatory",
+  "prior_holdout_touches": 0
+}

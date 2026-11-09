@@ -6,7 +6,6 @@ hurdle awareness (fee_pence and slippage_bps). Zero look-ahead bias.
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np
@@ -15,9 +14,8 @@ import numpy as np
 def decide_market_step(data: dict[str, Any]) -> dict[str, str]:
     """Evaluate observed price prefix and return {'action': 'buy' | 'hold' | 'sell'}.
 
-    Combines adaptive trend/momentum filter with volatility-adjusted drawdown protection
-    and explicit transaction-cost hurdle gating so excessive churn is avoided when
-    fees or slippage are high.
+    Enter once after a discount to the second observed price and a stabilising bar.
+    Fees and slippage raise the entry hurdle. Existing positions are held.
     """
     history = data.get("history")
     if not isinstance(history, list) or not history:
@@ -70,7 +68,7 @@ def decide_market_step(data: dict[str, Any]) -> dict[str, str]:
 
     arr = np.asarray(prices, dtype=np.float64)
     # Enter only when price breaks below the initial bar (buying at a discount to buy-and-hold's bar-1 entry)
-    # and shows a positive stabilization bar, or shows strong upward confirmation when costs are low.
+    # and stops falling.
     p_bar1 = arr[1]
     if current_price < p_bar1 * (1.0 - max(0.015, round_trip_cost_bps / 10000.0)) and arr[-1] >= arr[-2]:
         return {"action": "buy"}

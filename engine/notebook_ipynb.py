@@ -1,6 +1,6 @@
 """Executable Jupyter Notebook (.ipynb) generator and kernel verification utility.
 
-Generates a self-contained, offline-executable v4 Jupyter Notebook (.ipynb) for any
+Generates a data-embedded, offline-executable v4 Jupyter Notebook (.ipynb) for any
 completed AuditReport. Every number, table, chart, and verdict displayed in the Alpha
 Auditor UI and PDF export is reproduced from raw aligned market bars inside the notebook
 and verified via automated reconciliation assertions.
@@ -40,9 +40,8 @@ def render_jupyter_notebook_ipynb(
             benchmark_ticker=report.spec.benchmark_ticker,
         )
 
-    repo_root = str(Path(__file__).resolve().parent.parent)
     spec_json_str = report.spec.model_dump_json(indent=2)
-    df_records_json = df.to_json(orient="records")
+    df_records_json = json.dumps(df.to_dict(orient="records"), allow_nan=False)
 
     # Reference snapshot of report metrics for Cell 13 automated reconciliation
     expected_snapshot = {
@@ -102,7 +101,7 @@ def render_jupyter_notebook_ipynb(
             f"**Spec SHA-256:** `{report.spec_sha256}`  \n"
             f"**Aligned Data Slice SHA-256:** `{report.data_provenance.get('aligned_slice_sha256', 'N/A')}`\n\n"
             "---\n"
-            "This notebook is self-contained and executes end-to-end offline without external network access or API keys. "
+            "Start the kernel from the Alpha Auditor checkout or a directory inside it. Market data are embedded. "
             "Every signal, trade fill, fee deduction, high-water mark drawdown, econometric test, adversarial stress test, "
             "and scorecard verdict is recomputed from the aligned daily OHLCV dataset and verified against the AuditReport."
         )
@@ -122,9 +121,11 @@ def render_jupyter_notebook_ipynb(
             f"from scipy import stats\n"
             f"import statsmodels\n"
             f"import statsmodels.api as sm\n\n"
-            f"REPO_ROOT = Path({repo_root!r})\n"
-            f"if str(REPO_ROOT) not in sys.path:\n"
-            f"    sys.path.insert(0, str(REPO_ROOT))\n\n"
+            "roots = (Path.cwd(), *Path.cwd().parents)\n"
+            "repo_root = next((p for p in roots if (p / 'engine' / 'backtester.py').is_file()), None)\n"
+            "if repo_root is None:\n"
+            "    raise RuntimeError('Open this notebook from inside your Alpha Auditor checkout.')\n"
+            "sys.path.insert(0, str(repo_root))\n\n"
             f"from engine.schemas import StrategySpec\n"
             f"from engine.backtester import (\n"
             f"    compute_causal_signals,\n"
@@ -150,7 +151,7 @@ def render_jupyter_notebook_ipynb(
             f"BOOTSTRAP_SEED = 20261107\n"
             f"MONTE_CARLO_SEED = 42\n"
             f"print(f'Python: {{sys.version.split()[0]}} | NumPy: {{np.__version__}} | pandas: {{pd.__version__}} | SciPy: {{scipy.__version__}} | statsmodels: {{statsmodels.__version__}}')\n"
-            f"print(f'Audit Run ID: {report.run_id} | Spec SHA-256: {report.spec_sha256[:16]}...')"
+            f"print({('Audit run: ' + report.run_id)!r})"
         )
     )
 
@@ -597,11 +598,13 @@ def render_jupyter_notebook_ipynb(
             "            assert actual_val == expected_val, (\n"
             "                f'Mismatch in {split_key}.{field_name}: {actual_val} != {expected_val}'\n"
             "            )\n\n"
+            "assert len(boot_cis) == len(EXPECTED_SNAPSHOT['bootstrap_cis']), 'Bootstrap result count mismatch'\n"
             "for exp_b, act_b in zip(EXPECTED_SNAPSHOT['bootstrap_cis'], boot_cis):\n"
             "    assert exp_b['metric_name'] == act_b.metric_name, f'Bootstrap metric name mismatch: {act_b.metric_name}'\n"
             "    assert math.isclose(float(exp_b['point_estimate']), act_b.point_estimate, abs_tol=1e-6), f'Bootstrap point estimate mismatch for {act_b.metric_name}'\n"
             "    assert math.isclose(float(exp_b['ci_lower_95']), act_b.ci_lower_95, abs_tol=1e-6), f'Bootstrap CI lower mismatch for {act_b.metric_name}'\n"
             "    assert math.isclose(float(exp_b['ci_upper_95']), act_b.ci_upper_95, abs_tol=1e-6), f'Bootstrap CI upper mismatch for {act_b.metric_name}'\n\n"
+            "assert len(stress_suite.tests) == len(EXPECTED_SNAPSHOT['stress_test_outcomes']), 'Stress test count mismatch'\n"
             "for exp_st, act_st in zip(EXPECTED_SNAPSHOT['stress_test_outcomes'], stress_suite.tests):\n"
             "    assert exp_st['test_id'] == act_st.test_id, f'Stress test ID mismatch: {act_st.test_id}'\n"
             "    assert exp_st['outcome_badge'] == act_st.outcome_badge, f'Stress test outcome mismatch for {act_st.test_id}'\n"
@@ -612,7 +615,7 @@ def render_jupyter_notebook_ipynb(
             "assert scorecard.evaluated_checks_count == EXPECTED_SNAPSHOT['evaluated_checks_count'], 'Evaluated checks count mismatch!'\n"
             "for d in scorecard.dimensions:\n"
             "    assert d.status == EXPECTED_SNAPSHOT['dimension_statuses'][d.dimension_id], f'Dimension {d.dimension_id} status mismatch!'\n\n"
-            "print('ALL AUTOMATED RECONCILIATION ASSERTIONS PASSED (100% match with API AuditReport).')"
+            "print('All notebook reconciliation checks passed.')"
         )
     )
 

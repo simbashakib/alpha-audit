@@ -4,7 +4,7 @@
     "SPY": {
       "ticker": "SPY",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -13,7 +13,7 @@
     "QQQ": {
       "ticker": "QQQ",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -22,7 +22,7 @@
     "IWM": {
       "ticker": "IWM",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -31,7 +31,7 @@
     "DIA": {
       "ticker": "DIA",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -40,7 +40,7 @@
     "AAPL": {
       "ticker": "AAPL",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -49,7 +49,7 @@
     "MSFT": {
       "ticker": "MSFT",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -58,7 +58,7 @@
     "NVDA": {
       "ticker": "NVDA",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -67,7 +67,7 @@
     "GOOGL": {
       "ticker": "GOOGL",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -76,7 +76,7 @@
     "AMZN": {
       "ticker": "AMZN",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -85,7 +85,7 @@
     "META": {
       "ticker": "META",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -94,7 +94,7 @@
     "TSLA": {
       "ticker": "TSLA",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -103,7 +103,7 @@
     "AMD": {
       "ticker": "AMD",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -112,7 +112,7 @@
     "KO": {
       "ticker": "KO",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -121,7 +121,7 @@
     "PEP": {
       "ticker": "PEP",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -130,7 +130,7 @@
     "XOM": {
       "ticker": "XOM",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -139,7 +139,7 @@
     "CVX": {
       "ticker": "CVX",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -148,7 +148,7 @@
     "JPM": {
       "ticker": "JPM",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -157,7 +157,7 @@
     "BAC": {
       "ticker": "BAC",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -166,7 +166,7 @@
     "GS": {
       "ticker": "GS",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -175,7 +175,7 @@
     "MS": {
       "ticker": "MS",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -184,7 +184,7 @@
     "V": {
       "ticker": "V",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -193,7 +193,7 @@
     "MA": {
       "ticker": "MA",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -202,7 +202,7 @@
     "WMT": {
       "ticker": "WMT",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -211,7 +211,7 @@
     "COST": {
       "ticker": "COST",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -220,7 +220,7 @@
     "HD": {
       "ticker": "HD",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -229,7 +229,7 @@
     "LOW": {
       "ticker": "LOW",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -238,7 +238,7 @@
     "GLD": {
       "ticker": "GLD",
       "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -247,7 +247,7 @@
     "TLT": {
       "ticker": "TLT",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-02",
       "last_date": "2026-11-06",
       "total_rows": 2980,
@@ -256,7 +256,7 @@
     "BTC-USD": {
       "ticker": "BTC-USD",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2015-01-01",
       "last_date": "2026-11-07",
       "total_rows": 4329,
@@ -265,29 +265,11 @@
     "ETH-USD": {
       "ticker": "ETH-USD",
       "source": "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+      "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
       "first_date": "2017-11-09",
       "last_date": "2026-11-07",
       "total_rows": 3286,
       "sha256": "ad9925d7164812b980d38345e95b7e5c2f115fef13c294b46345ef734097d536"
-    },
-    "S": {
-      "ticker": "S",
-      "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
-      "first_date": "2021-06-30",
-      "last_date": "2026-11-06",
-      "total_rows": 1346,
-      "sha256": "23b6f407e6e2ce53fadf2a9add5528de5fc44b09ef8f7bc134f1a2269b255b2f"
-    },
-    "P": {
-      "ticker": "P",
-      "source": "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV \u2014 Cached)",
-      "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
-      "first_date": "2015-10-06",
-      "last_date": "2026-11-06",
-      "total_rows": 2789,
-      "sha256": "df762ee9eb33ab6cd435ef5df7cf3fd906c4c3b59dc9758f96c1b79ed7760c1e"
     }
   }
 }

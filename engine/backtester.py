@@ -14,7 +14,6 @@ Key guarantees:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
@@ -26,6 +25,7 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 import scipy
+import statsmodels
 from scipy import stats
 
 from engine.data_provider import load_aligned_series
@@ -71,7 +71,7 @@ def _compute_rsi(closes: np.ndarray, window: int) -> np.ndarray:
     avg_gain = float(np.mean(gains[:window]))
     avg_loss = float(np.mean(losses[:window]))
     if avg_loss <= 1e-12:
-        rsi[window] = 100.0
+        rsi[window] = 100.0 if avg_gain > 0 else 50.0
     else:
         rs = avg_gain / avg_loss
         rsi[window] = 100.0 - (100.0 / (1.0 + rs))
@@ -194,7 +194,8 @@ def compute_causal_signals(
             elif spec.signal_variant == "donchian_breakout":
                 # Prior-window high and low up to t-1 compared with close_t
                 high_channel = s_close.shift(1).rolling(fast_w, min_periods=fast_w).max().to_numpy()
-                low_channel = s_close.shift(1).rolling(slow_w, min_periods=slow_w).min().to_numpy()
+                low_w = params.secondary_window
+                low_channel = s_close.shift(1).rolling(low_w, min_periods=low_w).min().to_numpy()
                 up_break = np.where(
                     high_channel > 0, ((close_a - high_channel) / high_channel) * 100.0, np.nan
                 )
@@ -207,7 +208,7 @@ def compute_causal_signals(
                     up_break,
                     np.where(np.isfinite(down_break) & (down_break < 0.0), down_break, 0.0),
                 )
-                breakout_pct = np.where(np.isfinite(high_channel), breakout_pct, np.nan)
+                breakout_pct = np.where(np.isfinite(high_channel) | np.isfinite(low_channel), breakout_pct, np.nan)
                 signal_values = breakout_pct
                 indicators["high_channel"] = high_channel
                 indicators["low_channel"] = low_channel
@@ -350,7 +351,7 @@ def _check_entry_trigger(
                 return "short"
 
     elif spec.template_id == "trend_breakout":
-        band = max(0.0, params.entry_threshold) if params.entry_threshold < 15.0 else 0.0
+        band = max(0.0, params.entry_threshold)
         if spec.signal_variant in ("sma_crossover", "ema_crossover"):
             prev_val = signal_values[t - 1] if t > 0 else np.nan
             if np.isfinite(prev_val):
@@ -359,9 +360,9 @@ def _check_entry_trigger(
                 if prev_val >= -band and val < -band and params.direction in ("short", "both"):
                     return "short"
         elif spec.signal_variant == "donchian_breakout":
-            if val > 0.0 and params.direction in ("long", "both"):
+            if val > band and params.direction in ("long", "both"):
                 return "long"
-            if val < 0.0 and params.direction in ("short", "both"):
+            if val < -band and params.direction in ("short", "both"):
                 return "short"
 
     return None
@@ -490,7 +491,7 @@ def simulate_strategy_core(
             df, spec, split_idx
         )
 
-    exec_NextOpen = spec.execution.execution_timing == "next_open"
+    exec_next_open = spec.execution.execution_timing == "next_open"
     one_way_leg_bps = (
         override_cost_bps_per_leg
         if override_cost_bps_per_leg is not None
@@ -541,8 +542,8 @@ def simulate_strategy_core(
 
         # 1. Execute pending exit at bar t
         if active is not None and pending_exit_reason is not None:
-            fill_a = open_a[t] if exec_NextOpen else close_a[t]
-            fill_b = open_b[t] if exec_NextOpen else close_b[t]
+            fill_a = open_a[t] if exec_next_open else close_a[t]
+            fill_b = open_b[t] if exec_next_open else close_b[t]
             if is_pairs:
                 overnight_r = _pair_step_return(
                     active["direction"],
@@ -597,8 +598,8 @@ def simulate_strategy_core(
             if pending_entry.get("wait_bars", 0) > 0:
                 pending_entry["wait_bars"] -= 1
             else:
-                fill_a = open_a[t] if exec_NextOpen else close_a[t]
-                fill_b = open_b[t] if exec_NextOpen else close_b[t]
+                fill_a = open_a[t] if exec_next_open else close_a[t]
+                fill_b = open_b[t] if exec_next_open else close_b[t]
                 beta_w = float(hedge_arr[t - 1]) if t > 0 and np.isfinite(hedge_arr[t - 1]) else ols_beta
                 if is_pairs:
                     wa, wb = compute_pair_leg_weights(pending_entry["direction"], beta_w)
@@ -619,7 +620,6 @@ def simulate_strategy_core(
                     "beta_w": beta_w,
                     "leg_weight_a": wa,
                     "leg_weight_b": wb,
-                    "holding_days": 0,
                     "cum_gross": 0.0,
                     "entry_equity_net": cur_eq_net,
                     "entry_equity_gross": cur_eq_gross,
@@ -627,7 +627,7 @@ def simulate_strategy_core(
                 pending_entry = None
 
                 # If entered at open_t, mark from open_t to close_t on day t
-                if exec_NextOpen:
+                if exec_next_open:
                     if is_pairs:
                         intraday_r = _pair_step_return(
                             active["direction"], fill_a, close_a[t], fill_b, close_b[t], beta_w
@@ -639,7 +639,6 @@ def simulate_strategy_core(
                     active["cum_gross"] = (1.0 + active["cum_gross"]) * (1.0 + intraday_r) - 1.0
                     active["last_mark_a"] = close_a[t]
                     active["last_mark_b"] = close_b[t]
-                    active["holding_days"] = 1
                 else:
                     cur_eq_net = cur_eq_net * (1.0 - one_way_cost_rate)
         elif active is not None or circuit_breaker_tripped or t == n - 1:
@@ -663,7 +662,6 @@ def simulate_strategy_core(
             active["cum_gross"] = (1.0 + active["cum_gross"]) * (1.0 + bar_r) - 1.0
             active["last_mark_a"] = close_a[t]
             active["last_mark_b"] = close_b[t]
-            active["holding_days"] += 1
 
         # 3b. If on final bar t == n - 1 and position is still open, liquidate at close_t
         # BEFORE computing daily_net_ret[t], equity_net[t], peak_equity, and drawdown checks.
@@ -741,7 +739,7 @@ def simulate_strategy_core(
                 exit_reason = _check_exit_trigger(
                     t,
                     active["direction"],
-                    active["holding_days"],
+                    t + 1 - active["entry_idx"],
                     open_mtm_pct,
                     signal_values,
                     indicators,
@@ -819,7 +817,7 @@ def _compute_period_metrics(
     tr_nets = [t.net_return_pct for t in trades]
     k_trades = len(tr_nets)
     exposure = float(np.mean(np.abs(pos) > 0) * 100.0)
-    is_zero_exposure = bool(k_trades == 0 and exposure <= 1e-9 and np.std(net_r) <= 1e-12)
+    is_zero_exposure = bool(k_trades == 0 and exposure <= 1e-9 and np.all(np.abs(net_r) <= 1e-12))
 
     sr_bench, _, _, _, _ = lo_mertens_sharpe_se_and_psr(bench_r, benchmark_sr_annual=0.0)
     if is_zero_exposure:
@@ -1269,6 +1267,8 @@ def compute_engine_version_info() -> dict[str, Any]:
         "stress_tests.py",
         "data_provider.py",
         "hypothesis_parser.py",
+        "guardrails.py",
+        "literature.py",
     ]
     hasher = hashlib.sha256()
     module_hashes: dict[str, str] = {}
@@ -1286,6 +1286,7 @@ def compute_engine_version_info() -> dict[str, Any]:
         "numpy_version": str(np.__version__),
         "pandas_version": str(pd.__version__),
         "scipy_version": str(scipy.__version__),
+        "statsmodels_version": str(statsmodels.__version__),
     }
 
 
@@ -1317,9 +1318,6 @@ def _verify_report_guardrails(
     return True
 
 
-_AUDIT_REPORT_CACHE: dict[str, str] = {}
-
-
 def run_full_audit(spec: StrategySpec) -> AuditReport:
     """Run the complete deterministic backtest, temporal holdout split, and econometric
     diagnostic suite on a confirmed StrategySpec.
@@ -1327,7 +1325,7 @@ def run_full_audit(spec: StrategySpec) -> AuditReport:
     if not spec.human_confirmed:
         raise ValueError("StrategySpec must be explicitly approved by the human researcher before execution.")
 
-    # Load aligned dataset FIRST so data slice SHA-256 and engine version are part of the cache key
+    # Identify the run by its specification, aligned data and computational environment.
     df, provenance = load_aligned_series(
         asset_a=spec.asset_a,
         start_date=spec.start_date,
@@ -1340,11 +1338,9 @@ def run_full_audit(spec: StrategySpec) -> AuditReport:
     spec_sha256 = hashlib.sha256(spec_json.encode("utf-8")).hexdigest()
     engine_ver = compute_engine_version_info()
     aligned_sha = str(provenance.get("aligned_slice_sha256", ""))
-    code_sha = str(engine_ver.get("code_sha256", ""))
-    composite_cache_key = f"{spec_sha256}:{aligned_sha}:{code_sha}"
-
-    if composite_cache_key in _AUDIT_REPORT_CACHE:
-        return AuditReport.model_validate_json(_AUDIT_REPORT_CACHE[composite_cache_key])
+    code_sha = engine_ver["code_sha256"]
+    environment_sha = hashlib.sha256(json.dumps(engine_ver, sort_keys=True).encode()).hexdigest()
+    composite_cache_key = f"{spec_sha256}:{aligned_sha}:{environment_sha}"
 
     n = len(df)
     split_idx = max(25, min(n - 25, int(round(n * spec.execution.train_split_ratio))))
@@ -1645,7 +1641,6 @@ def run_full_audit(spec: StrategySpec) -> AuditReport:
         limitations=limitations,
         guardrail_verified=guardrail_ok,
     )
-    _AUDIT_REPORT_CACHE[composite_cache_key] = report.model_dump_json()
     return report
 
 
@@ -1654,17 +1649,11 @@ def save_audit_run(report: AuditReport, runs_dir: Path, overwrite: bool = False)
     runs_dir.mkdir(parents=True, exist_ok=True)
     target_path = runs_dir / f"{report.run_id}.json"
     if target_path.exists() and not overwrite:
-        try:
-            existing_raw = json.loads(target_path.read_text(encoding="utf-8"))
-            existing_ver = existing_raw.get("schema_version", "1.0")
-            if existing_ver == "1.0":
-                # Preserve legacy v1 run untouched and write v2 under explicit v2 suffix if needed
-                backup_v1 = runs_dir / f"{report.run_id}-v1.json"
-                if not backup_v1.exists():
-                    backup_v1.write_text(json.dumps(existing_raw, indent=2), encoding="utf-8")
-                return target_path
-        except Exception:
-            pass
+        existing = json.loads(target_path.read_bytes())
+        if existing.get("schema_version", "1.0") != "1.0":
+            return target_path
+        # Keep legacy bytes available if a new report shares the old identifier.
+        (runs_dir / f"{report.run_id}-v1.json").write_bytes(target_path.read_bytes())
 
     tmp_path = runs_dir / f".{report.run_id}.{uuid.uuid4().hex[:8]}.tmp"
     payload = report.model_dump_json(indent=2)

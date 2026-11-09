@@ -6,9 +6,10 @@ and local disk caching.
 from __future__ import annotations
 
 import hashlib
-import json
+import io
+import os
+import tempfile
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,6 @@ except ImportError:
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CACHE_DIR = DATA_DIR / "cache"
-MANIFEST_PATH = DATA_DIR / "data_manifest.json"
 
 # Natural-language name to Yahoo Finance ticker mapping
 ENTITY_TO_TICKER: dict[str, str] = {
@@ -230,7 +230,6 @@ def fetch_and_cache_ticker(ticker: str, start_date: str = "2015-01-01", force_re
 
     source_note = "Yahoo Finance (Corporate-Action Adjusted Daily OHLCV — Cached)"
     if csv_path.exists() and not force_refresh:
-        df = pd.read_csv(csv_path)
         raw_bytes = csv_path.read_bytes()
     else:
         if yf is None:
@@ -239,40 +238,32 @@ def fetch_and_cache_ticker(ticker: str, start_date: str = "2015-01-01", force_re
             yt = yf.Ticker(symbol)
             hist = yt.history(start=start_date, auto_adjust=False, actions=False)
             df = _normalize_yfinance_df(hist)
-            df.to_csv(csv_path, index=False)
-            raw_bytes = csv_path.read_bytes()
-            source_note = "Yahoo Finance Live Fetch (Corporate-Action Adjusted Daily OHLCV)"
+            raw_bytes = df.to_csv(index=False).encode("utf-8")
+            with tempfile.NamedTemporaryFile(dir=CACHE_DIR, delete=False) as temp:
+                temp_path = Path(temp.name)
+            try:
+                temp_path.write_bytes(raw_bytes)
+                os.replace(temp_path, csv_path)
+            finally:
+                temp_path.unlink(missing_ok=True)
         except Exception as exc:
             raise ValueError(
                 f"Could not fetch historical data for ticker '{symbol}' from Yahoo Finance ({exc}). "
                 "Verify that the ticker symbol is valid on Yahoo Finance (e.g., AAPL, SPY, KO, BRK-B, BTC-USD, ^FTSE)."
             ) from exc
 
+    df = pd.read_csv(io.BytesIO(raw_bytes))
     sha256_hash = hashlib.sha256(raw_bytes).hexdigest()
     meta = {
         "ticker": symbol,
         "source": source_note,
-        "adjustment": "CRSP/Yahoo Total-Return & Split Ratio Applied to Open/High/Low/Close",
+        "adjustment": "Yahoo adjusted-close / close ratio applied to OHLC",
         "first_date": str(df["date"].iloc[0]),
         "last_date": str(df["date"].iloc[-1]),
         "total_rows": int(len(df)),
         "sha256": sha256_hash,
     }
-    _update_manifest(symbol, meta)
     return df, meta
-
-
-def _update_manifest(symbol: str, meta: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    manifest: dict[str, Any] = {"updated_at_utc": datetime.now(timezone.utc).isoformat(), "tickers": {}}
-    if MANIFEST_PATH.exists():
-        try:
-            manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    manifest.setdefault("tickers", {})[symbol] = meta
-    manifest["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def load_aligned_series(

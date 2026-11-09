@@ -3,7 +3,7 @@
 
 Usage examples:
   python replay.py data/runs/audit-022cbf20a8.json
-  python replay.py --spec path/to/spec.json --ipynb out.ipynb --execute-ipynb
+  python replay.py path/to/spec.json --ipynb out.ipynb --execute-ipynb
   python replay.py --verify-repeatability
 """
 
@@ -39,7 +39,6 @@ def _replay_from_path(
     else:
         spec = StrategySpec.model_validate(raw)
 
-    spec.human_confirmed = True
     replayed = run_full_audit(spec)
 
     data_sha = replayed.replay_manifest.get("aligned_slice_sha256") or replayed.data_provenance.get(
@@ -74,21 +73,12 @@ def _replay_from_path(
         prior_ver = getattr(prior_report, "schema_version", "1.0")
         print(f"\n--- Comparison vs Saved Run (schema_version={prior_ver}, id={prior_report.run_id}) ---")
         if prior_ver == "2.0" and prior_report.engine_version == replayed.engine_version:
-            assert replayed.run_id == prior_report.run_id, (
-                f"Run ID mismatch: {replayed.run_id} != {prior_report.run_id}"
-            )
-            prior_dsha = prior_report.replay_manifest.get(
-                "aligned_slice_sha256"
-            ) or prior_report.data_provenance.get("aligned_slice_sha256", "")
-            assert data_sha == prior_dsha, "Dataset SHA mismatch"
-            assert (
-                replayed.out_of_sample_metrics.total_net_return_pct
-                == prior_report.out_of_sample_metrics.total_net_return_pct
-            ), "OOS net return mismatch"
-            print("EXACT MATCH: Replayed v2 audit matches saved v2 artifact bit-for-bit.")
+            if replayed.model_dump(exclude={"created_at_utc"}) != prior_report.model_dump(exclude={"created_at_utc"}):
+                raise ValueError("Recomputed report differs from the saved audit.")
+            print("Replay matched all saved report fields except the creation timestamp.")
         else:
             print(
-                f"Legacy -> v2 Reconciliation:\n"
+                f"Comparison across schema or engine versions:\n"
                 f"  IS Net Return  : {prior_report.in_sample_metrics.total_net_return_pct:+.2f}% -> "
                 f"{replayed.in_sample_metrics.total_net_return_pct:+.2f}%\n"
                 f"  IS MaxDD       : {prior_report.in_sample_metrics.max_drawdown_pct:.2f}% -> "
@@ -122,6 +112,7 @@ def _replay_from_path(
 
     if pdf_out is not None:
         pdf_bytes = render_jupyter_notebook_pdf(replayed)
+        pdf_out.parent.mkdir(parents=True, exist_ok=True)
         pdf_out.write_bytes(pdf_bytes)
         print(f"Exported Audit Report (.pdf) to: {pdf_out}")
 
@@ -136,14 +127,9 @@ def _verify_repeatability() -> int:
     spec.human_confirmed = True
     r1 = run_full_audit(spec)
     r2 = run_full_audit(spec)
-    assert r1.run_id == r2.run_id
-    assert r1.spec_sha256 == r2.spec_sha256
-    d1 = r1.replay_manifest.get("aligned_slice_sha256", "")
-    d2 = r2.replay_manifest.get("aligned_slice_sha256", "")
-    assert d1 == d2
-    assert r1.model_dump(mode="json", exclude={"created_at_utc"}) == r2.model_dump(
-        mode="json", exclude={"created_at_utc"}
-    )
+    d1 = r1.replay_manifest["aligned_slice_sha256"]
+    if r1.model_dump(exclude={"created_at_utc"}) != r2.model_dump(exclude={"created_at_utc"}):
+        raise ValueError("The two independent audit computations produced different reports.")
     print(
         f"Repeatability verified: run_id={r1.run_id}, "
         f"spec_sha256={r1.spec_sha256}, dataset_sha256={d1}"
